@@ -1,0 +1,6 @@
+node_modules
+apps/resident/pnpm-workspace.yaml
+apps/admin/pnpm-workspace.yaml
+dist/
+.turbo/
+.next/

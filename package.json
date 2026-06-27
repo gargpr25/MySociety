@@ -1,0 +1,19 @@
+{
+  "name": "@mysociety/monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint"
+  },
+  "packageManager": "pnpm@10.30.3",
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "turbo": "^2.10.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

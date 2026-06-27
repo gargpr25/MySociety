@@ -1,0 +1,4 @@
+ALTER TABLE "towers" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "units" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "towers_isolation_policy" ON "towers" AS PERMISSIVE FOR ALL TO public USING (society_id = (current_setting('app.current_society_id'))::uuid) WITH CHECK (society_id = (current_setting('app.current_society_id'))::uuid);--> statement-breakpoint
+CREATE POLICY "units_isolation_policy" ON "units" AS PERMISSIVE FOR ALL TO public USING (society_id = (current_setting('app.current_society_id'))::uuid) WITH CHECK (society_id = (current_setting('app.current_society_id'))::uuid);

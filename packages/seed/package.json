@@ -1,0 +1,22 @@
+{
+  "name": "@mysociety/seed",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "seed": "tsx index.ts"
+  },
+  "dependencies": {
+    "@mysociety/config": "workspace:*",
+    "@mysociety/db": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
