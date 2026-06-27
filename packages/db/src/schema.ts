@@ -84,6 +84,31 @@ export const parkingSpots = pgTable("parking_spots", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const notices = pgTable("notices", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  audience: text("audience").notNull().default("all"),
+  pinned: boolean("pinned").notNull().default(false),
+  publishAt: timestamp("publish_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const attachments = pgTable("attachments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: uuid("entity_id").notNull(),
+  url: text("url").notNull(),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull().default("application/octet-stream"),
+  sizeBytes: integer("size_bytes").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const otpRequests = pgTable("otp_requests", {
   id: uuid("id").primaryKey().defaultRandom(),
   purpose: text("purpose").notNull(),

@@ -4,6 +4,7 @@ import type { SmsProvider } from "@mysociety/config";
 import type { TenantAwareDb } from "./db.js";
 import { registerAdminDirectoryRoutes } from "./routes/admin-directory.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerNoticeRoutes } from "./routes/notices.js";
 
 export interface BuildAppOptions {
   tenantDb?: TenantAwareDb;
@@ -31,6 +32,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   if (options.tenantDb && options.jwtSecret) {
     registerAdminDirectoryRoutes(app, {
+      tenantDb: options.tenantDb,
+      jwtSecret: options.jwtSecret,
+    });
+    registerNoticeRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
     });

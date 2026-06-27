@@ -50,3 +50,12 @@ export {
   listParkingSpots,
   listParkingSpotsByUnitId,
 } from "./repositories/parking-spots.js";
+export {
+  createNotice,
+  deleteNotice,
+  findNoticeById,
+  listActiveNotices,
+  listAllNotices,
+  updateNotice,
+  type NoticeAudience,
+} from "./repositories/notices.js";
