@@ -1,7 +1,15 @@
-import { createDb, listTowers, listUnits, runMigrations, withTenantContext } from "@mysociety/db";
+import {
+  createDb,
+  findAdminByEmail,
+  findResidentByMobile,
+  listTowers,
+  listUnits,
+  runMigrations,
+  withTenantContext,
+} from "@mysociety/db";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { seedFoundation, SEED_SOCIETY_NAME } from "./seed.js";
+import { seedFoundation, SEED_ADMIN_EMAIL, SEED_SOCIETY_NAME } from "./seed.js";
 
 const adminUrl =
   process.env.TEST_ADMIN_DATABASE_URL ?? "postgresql://postgres:postgres@localhost:5432/mysociety_test";
@@ -50,5 +58,21 @@ describe("seedFoundation", () => {
       expect(towers).toHaveLength(2);
       expect(units).toHaveLength(10);
     });
+  });
+
+  it("seeds residents and a society_admin idempotently", async () => {
+    const db = createDb(appPool);
+
+    const society = await seedFoundation(db);
+    await seedFoundation(db);
+
+    await withTenantContext(db, society.id, async (tx) => {
+      const resident = await findResidentByMobile(tx, "9810000001");
+      expect(resident?.name).toBe("Asha Sharma");
+      expect(resident?.unitId).not.toBeNull();
+    });
+
+    const admin = await findAdminByEmail(createDb(adminPool), SEED_ADMIN_EMAIL);
+    expect(admin?.societyId).toBe(society.id);
   });
 });

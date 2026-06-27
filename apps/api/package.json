@@ -13,9 +13,13 @@
   "dependencies": {
     "@mysociety/config": "workspace:*",
     "@mysociety/db": "workspace:*",
-    "fastify": "^5.2.0"
+    "@mysociety/types": "workspace:*",
+    "fastify": "^5.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "typescript": "^5.7.2",

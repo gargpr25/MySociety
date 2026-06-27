@@ -1,9 +1,14 @@
 import {
+  createAdminUser,
   createDb,
   createPool,
+  createResident,
   createSociety,
   createTower,
   createUnit,
+  findAdminByEmail,
+  findResidentByMobile,
+  findRoleByName,
   findSocietyByName,
   findTowerByName,
   findUnitByFlatNo,
@@ -13,6 +18,20 @@ import {
 import { loadEnv } from "@mysociety/config";
 
 export const SEED_SOCIETY_NAME = "Seed Society";
+export const SEED_ADMIN_EMAIL = "admin@seed-society.test";
+
+interface ResidentSeed {
+  name: string;
+  mobile: string;
+  roleName: "resident_owner" | "resident_tenant";
+  flatNo: string;
+}
+
+const RESIDENT_PLAN: ResidentSeed[] = [
+  { name: "Asha Sharma", mobile: "9810000001", roleName: "resident_owner", flatNo: "101" },
+  { name: "Vikram Mehta", mobile: "9810000002", roleName: "resident_owner", flatNo: "201" },
+  { name: "Priya Nair", mobile: "9810000003", roleName: "resident_tenant", flatNo: "203" },
+];
 
 interface UnitSeed {
   flatNo: string;
@@ -73,19 +92,59 @@ async function findOrCreateUnit(db: Database, societyId: string, towerId: string
   });
 }
 
+async function findOrCreateSeedAdmin(db: Database, societyId: string) {
+  return withTenantContext(db, societyId, async (tx) => {
+    const existing = await findAdminByEmail(tx, SEED_ADMIN_EMAIL);
+    if (existing) return existing;
+    const role = await findRoleByName(tx, "society_admin");
+    if (!role) throw new Error("Role society_admin not found; auth migration not applied?");
+    const created = await createAdminUser(tx, {
+      societyId,
+      roleId: role.id,
+      email: SEED_ADMIN_EMAIL,
+      name: "Seed Society Admin",
+    });
+    if (!created) throw new Error("Failed to create seed admin");
+    return created;
+  });
+}
+
 /**
- * Seeds one society with 2 towers and 10 units. Find-or-create at every
- * step, so re-running never creates duplicates.
+ * Seeds one society with 2 towers, 10 units, a few residents, and one
+ * society_admin. Find-or-create at every step, so re-running never creates
+ * duplicates.
  */
 export async function seedFoundation(db: Database) {
   const society = await findOrCreateSociety(db, SEED_SOCIETY_NAME);
 
+  const unitsByFlatNo = new Map<string, string>();
   for (const towerPlan of TOWER_PLAN) {
     const tower = await findOrCreateTower(db, society.id, towerPlan.name);
     for (const unit of towerPlan.units) {
-      await findOrCreateUnit(db, society.id, tower.id, unit);
+      const created = await findOrCreateUnit(db, society.id, tower.id, unit);
+      unitsByFlatNo.set(unit.flatNo, created.id);
     }
   }
+
+  for (const resident of RESIDENT_PLAN) {
+    await withTenantContext(db, society.id, async (tx) => {
+      const existing = await findResidentByMobile(tx, resident.mobile);
+      if (existing) return existing;
+      const role = await findRoleByName(tx, resident.roleName);
+      if (!role) throw new Error(`Role ${resident.roleName} not found; auth migration not applied?`);
+      const created = await createResident(tx, {
+        societyId: society.id,
+        unitId: unitsByFlatNo.get(resident.flatNo) ?? null,
+        roleId: role.id,
+        name: resident.name,
+        mobile: resident.mobile,
+      });
+      if (!created) throw new Error(`Failed to create resident ${resident.mobile}`);
+      return created;
+    });
+  }
+
+  await findOrCreateSeedAdmin(db, society.id);
 
   return society;
 }
