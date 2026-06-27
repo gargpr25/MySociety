@@ -39,6 +39,42 @@ export async function findResidentById(db: Database, id: string) {
   return row;
 }
 
+export async function listResidentsByUnitId(db: Database, unitId: string) {
+  return db.select().from(residents).where(eq(residents.unitId, unitId));
+}
+
+/**
+ * Bulk find-or-create for seed/CSV-import scale, mirroring
+ * bulkFindOrCreateUnits: one bulk select of existing mobiles in this society,
+ * one chunked insert of only the missing rows, one final select to build a
+ * complete mobile -> id map. A landlord (same mobile reused across many
+ * units) lands on the same residents row here; the caller links it to
+ * multiple units via unit_residents.
+ */
+export async function bulkFindOrCreateResidents(
+  db: Database,
+  societyId: string,
+  residentsToCreate: Array<{ name: string; mobile: string; roleId: string }>,
+): Promise<Map<string, string>> {
+  if (residentsToCreate.length === 0) return new Map();
+
+  await db
+    .insert(residents)
+    .values(
+      residentsToCreate.map((r) => ({
+        societyId,
+        roleId: r.roleId,
+        name: r.name,
+        mobile: r.mobile,
+        unitId: null,
+      })),
+    )
+    .onConflictDoNothing();
+
+  const rows = await db.select().from(residents).where(eq(residents.societyId, societyId));
+  return new Map(rows.map((r) => [r.mobile, r.id]));
+}
+
 /**
  * Pre-auth lookup: resolves which society (if any) a mobile number belongs
  * to, before any tenant context exists. Goes through the SECURITY DEFINER

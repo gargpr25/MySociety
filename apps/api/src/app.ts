@@ -1,6 +1,8 @@
+import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { SmsProvider } from "@mysociety/config";
 import type { TenantAwareDb } from "./db.js";
+import { registerAdminDirectoryRoutes } from "./routes/admin-directory.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 
 export interface BuildAppOptions {
@@ -11,6 +13,7 @@ export interface BuildAppOptions {
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: true });
+  app.register(multipart);
 
   if (options.tenantDb) {
     app.decorate("tenantDb", options.tenantDb);
@@ -23,6 +26,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
       smsProvider: options.smsProvider,
+    });
+  }
+
+  if (options.tenantDb && options.jwtSecret) {
+    registerAdminDirectoryRoutes(app, {
+      tenantDb: options.tenantDb,
+      jwtSecret: options.jwtSecret,
     });
   }
 

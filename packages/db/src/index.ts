@@ -4,13 +4,22 @@ export { runMigrations } from "./migrate.js";
 export * as schema from "./schema.js";
 export { createSociety, findSocietyByName } from "./repositories/societies.js";
 export { createTower, findTowerByName, listTowers } from "./repositories/towers.js";
-export { createUnit, findUnitByFlatNo, listUnits } from "./repositories/units.js";
+export {
+  bulkFindOrCreateUnits,
+  createUnit,
+  findUnitByFlatNo,
+  findUnitById,
+  listUnits,
+  updateUnit,
+} from "./repositories/units.js";
 export { findRoleByName, findRoleById } from "./repositories/roles.js";
 export {
+  bulkFindOrCreateResidents,
   createResident,
   findResidentByMobile,
   findResidentById,
   findResidentsByMobileAcrossTenants,
+  listResidentsByUnitId,
 } from "./repositories/residents.js";
 export {
   createAdminUser,
@@ -25,3 +34,19 @@ export {
   incrementOtpAttempts,
   markOtpConsumed,
 } from "./repositories/otp-requests.js";
+export {
+  bulkCreateUnitResidents,
+  createUnitResident,
+  deleteUnitResident,
+  findUnitResident,
+  listUnitResidentsByUnitId,
+  updateUnitResident,
+  type Relationship,
+} from "./repositories/unit-residents.js";
+export {
+  bulkFindOrCreateParkingSpots,
+  createParkingSpot,
+  findParkingSpotByNo,
+  listParkingSpots,
+  listParkingSpotsByUnitId,
+} from "./repositories/parking-spots.js";

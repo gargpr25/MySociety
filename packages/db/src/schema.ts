@@ -63,6 +63,27 @@ export const adminUsers = pgTable("admin_users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const unitResidents = pgTable("unit_residents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  unitId: uuid("unit_id").notNull(),
+  residentId: uuid("resident_id").notNull(),
+  relationship: text("relationship").notNull(),
+  isPrimary: boolean("is_primary").notNull().default(false),
+  canPay: boolean("can_pay").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const parkingSpots = pgTable("parking_spots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  spotNo: text("spot_no").notNull(),
+  type: text("type").notNull().default("car"),
+  unitId: uuid("unit_id"),
+  isRentable: boolean("is_rentable").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const otpRequests = pgTable("otp_requests", {
   id: uuid("id").primaryKey().defaultRandom(),
   purpose: text("purpose").notNull(),
