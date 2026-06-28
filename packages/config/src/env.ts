@@ -17,6 +17,10 @@ const envSchema = z.object({
   // 32-byte AES-256 key encoded as 64 hex chars. Required in production for
   // encrypting integration connector credentials at rest.
   INTEGRATION_ENCRYPTION_KEY: z.string().length(64).optional(),
+  // Which classifier backend to use for the chatbot. "fake" uses a
+  // deterministic rule-based classifier (default). "llm" is reserved for
+  // a future LLM-backed implementation selected at runtime.
+  CHAT_CLASSIFIER: z.enum(["fake", "llm"]).default("fake"),
 });
 
 export type Env = z.infer<typeof envSchema>;

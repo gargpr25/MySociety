@@ -26,6 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="/payments" style={{ color: "#374151", textDecoration: "none" }}>Payments</a>
             <a href="/tickets" style={{ color: "#374151", textDecoration: "none" }}>Tickets</a>
             <a href="/bookings" style={{ color: "#374151", textDecoration: "none" }}>Bookings</a>
+            <a href="/chat" style={{ color: "#374151", textDecoration: "none" }}>Chat</a>
           </nav>
           <div style={{ padding: "1rem", flex: 1 }}>
             {children}

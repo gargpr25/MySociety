@@ -149,6 +149,17 @@ export const api = {
 
   cancelBooking: (id: string) =>
     apiFetch<ResidentBooking>(`/resident/bookings/${id}/cancel`, { method: "POST" }),
+
+  // ── Chat ───────────────────────────────────────────────────────────────────
+
+  sendChatMessage: (message: string) =>
+    apiFetch<{ reply: string; ticketId?: string; messageId: string }>("/resident/chat/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    }),
+
+  listChatMessages: () => apiFetch<ChatMessage[]>("/resident/chat/messages"),
 };
 
 export type PaymentOrder = {
@@ -220,5 +231,14 @@ export type ResidentBooking = {
   slotStart: string;
   slotEnd: string;
   status: string;
+  createdAt: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  sessionId: string;
+  role: string;
+  body: string;
+  metadata: object;
   createdAt: string;
 };

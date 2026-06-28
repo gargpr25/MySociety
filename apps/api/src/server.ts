@@ -11,6 +11,7 @@ async function main() {
     jwtSecret: env.JWT_SECRET,
     smsProvider,
     integrationEncryptionKey: env.INTEGRATION_ENCRYPTION_KEY,
+    chatClassifier: env.CHAT_CLASSIFIER,
   });
   await app.listen({ host: "0.0.0.0", port: env.PORT });
 }

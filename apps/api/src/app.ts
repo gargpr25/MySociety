@@ -13,6 +13,7 @@ import { registerResidentBillingRoutes } from "./routes/resident-billing.js";
 import { registerBookingRoutes } from "./routes/bookings.js";
 import { registerTicketRoutes } from "./routes/tickets.js";
 import { registerIntegrationRoutes } from "./routes/integrations.js";
+import { registerChatRoutes } from "./routes/chat.js";
 import { createDispatcher, type DispatcherFn } from "./connectors/dispatcher.js";
 
 export interface BuildAppOptions {
@@ -22,6 +23,7 @@ export interface BuildAppOptions {
   smsProvider?: SmsProvider;
   paymentProvider?: PaymentProvider;
   integrationEncryptionKey?: string;
+  chatClassifier?: string;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -73,6 +75,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerBookingRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
+    });
+    registerChatRoutes(app, {
+      tenantDb: options.tenantDb,
+      jwtSecret: options.jwtSecret,
+      classifierType: options.chatClassifier,
     });
 
     if (options.integrationEncryptionKey) {

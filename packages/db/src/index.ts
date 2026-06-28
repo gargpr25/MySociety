@@ -157,3 +157,9 @@ export {
   updateIntegrationConfig,
   type CreateIntegrationConfigInput,
 } from "./repositories/integrations.js";
+export {
+  createChatSession,
+  findActiveChatSession,
+  listChatMessages,
+  saveChatMessage,
+} from "./repositories/chat.js";
