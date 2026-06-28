@@ -3,19 +3,32 @@ import {
   bulkFindOrCreateParkingSpots,
   bulkFindOrCreateResidents,
   bulkFindOrCreateUnits,
+  bulkInsertBillLineItems,
+  bulkInsertBills,
+  bulkUpsertMeterReadings,
   createAdminUser,
+  createBillHead,
+  createBillingCycle,
   createDb,
   createPool,
   createResident,
   createSociety,
   createTower,
+  deleteBillsByCycleId,
   findAdminByEmail,
+  findBillingCycleByPeriod,
+  findPreviousBillingCycle,
   findResidentByMobile,
   findRoleByName,
   findSocietyByName,
   findTowerByName,
   findUnitByFlatNo,
+  listActiveBillHeads,
+  listBillsByCycleId,
+  listUnits,
   type Relationship,
+  updateBillStatusAndPaid,
+  updateBillingCycleStatus,
   withTenantContext,
   type Database,
 } from "@mysociety/db";
@@ -268,6 +281,218 @@ async function seedDirectory(
   );
 }
 
+// ── Billing seed ──────────────────────────────────────────────────────────────
+
+// Deterministic electricity consumption: 50–69 kWh/month per unit.
+function electricityConsumption(unitIndex: number): number {
+  return 50 + (unitIndex % 20);
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Seeds 4 bill heads, 6 billing cycles (Jan–Jun 2026), meter readings for all
+ * 500 units, and bills + line items for every cycle. Closed cycles have a
+ * realistic paid/partial/overdue mix. Idempotent.
+ */
+async function seedBilling(db: Database, societyId: string) {
+  type TaxRule = { type: "none" } | { type: "percentage"; rate: number } | { type: "fixed"; amount: number };
+
+  // 1. Ensure the 4 standard bill heads exist (idempotent via listActiveBillHeads + name match).
+  const existingHeads = await withTenantContext(db, societyId, (tx) => listActiveBillHeads(tx));
+  const headNames = new Set(existingHeads.map((h) => h.name));
+
+  const headDefs: Array<{ name: string; computeRule: string; rate: number; taxRule: TaxRule }> = [
+    { name: "Maintenance",  computeRule: "fixed",          rate: 3000, taxRule: { type: "none" } },
+    { name: "Electricity",  computeRule: "metered",        rate: 8,    taxRule: { type: "percentage", rate: 18 } },
+    { name: "Water",        computeRule: "flat_per_unit",  rate: 500,  taxRule: { type: "none" } },
+    { name: "Sewer",        computeRule: "flat_per_unit",  rate: 200,  taxRule: { type: "none" } },
+  ];
+
+  for (const def of headDefs) {
+    if (!headNames.has(def.name)) {
+      await withTenantContext(db, societyId, (tx) =>
+        createBillHead(tx, { societyId, name: def.name, computeRule: def.computeRule, rate: def.rate, taxRule: def.taxRule }),
+      );
+    }
+  }
+
+  const heads = await withTenantContext(db, societyId, (tx) => listActiveBillHeads(tx));
+  const elecHead = heads.find((h) => h.name === "Electricity");
+
+  // 2. Load all units once.
+  const allUnits = await withTenantContext(db, societyId, (tx) => listUnits(tx));
+
+  // 3. Define 6 billing cycles: 2026-01 to 2026-06.
+  const cycles: Array<{ period: string; dueDate: string; finalStatus: "closed" | "published" | "draft" }> = [
+    { period: "2026-01", dueDate: "2026-01-15", finalStatus: "closed" },
+    { period: "2026-02", dueDate: "2026-02-15", finalStatus: "closed" },
+    { period: "2026-03", dueDate: "2026-03-15", finalStatus: "closed" },
+    { period: "2026-04", dueDate: "2026-04-15", finalStatus: "closed" },
+    { period: "2026-05", dueDate: "2026-05-15", finalStatus: "published" },
+    { period: "2026-06", dueDate: "2026-06-15", finalStatus: "draft" },
+  ];
+
+  for (let ci = 0; ci < cycles.length; ci++) {
+    const { period, dueDate, finalStatus } = cycles[ci]!;
+
+    // Find or create the cycle.
+    let cycle = await withTenantContext(db, societyId, (tx) => findBillingCycleByPeriod(tx, period));
+    if (!cycle) {
+      cycle = await withTenantContext(db, societyId, (tx) =>
+        createBillingCycle(tx, { societyId, period, dueDate }),
+      );
+    }
+    if (!cycle) throw new Error(`Failed to ensure billing cycle ${period}`);
+    const cycleId = cycle.id;
+
+    // Check if bills already exist for this cycle; skip if already seeded.
+    const existingBills = await withTenantContext(db, societyId, (tx) => listBillsByCycleId(tx, cycleId));
+    if (existingBills.length > 0) continue;
+
+    // Upload meter readings for Electricity head (deterministic).
+    if (elecHead) {
+      const monthOffset = ci; // 0-based month offset for cumulative readings
+      const readings = allUnits.map((unit, ui) => {
+        const consumptionPerMonth = electricityConsumption(ui);
+        const prev = 100 + monthOffset * (50 + (ui % 20));
+        return {
+          societyId,
+          unitId: unit.id,
+          headId: elecHead.id,
+          period,
+          prevReading: prev,
+          currentReading: prev + consumptionPerMonth,
+        };
+      });
+      await withTenantContext(db, societyId, (tx) => bulkUpsertMeterReadings(tx, readings));
+    }
+
+    // Get arrears from previous cycle.
+    const arrearsMap = new Map<string, number>();
+    const prevCycle = await withTenantContext(db, societyId, (tx) => findPreviousBillingCycle(tx, period));
+    if (prevCycle) {
+      const prevBills = await withTenantContext(db, societyId, (tx) => listBillsByCycleId(tx, prevCycle.id));
+      for (const b of prevBills) {
+        const outstanding = round2(Number(b.totalDue) - Number(b.paidAmount));
+        if (outstanding > 0) arrearsMap.set(b.unitId, outstanding);
+      }
+    }
+
+    // Compute bills in memory.
+    const billSpecs: Array<{
+      societyId: string; unitId: string; cycleId: string; dueDate: string;
+      subtotal: number; taxTotal: number; arrearsCarryForward: number; totalDue: number;
+    }> = [];
+    const lineSpecsByUnit: Array<Array<{
+      societyId: string; billId: string; headId: string; description: string;
+      qty: number; rate: number; amount: number; taxAmount: number;
+    }>> = [];
+
+    for (let ui = 0; ui < allUnits.length; ui++) {
+      const unit = allUnits[ui]!;
+      const lines: Array<{ headId: string; description: string; qty: number; rate: number; amount: number; taxAmount: number }> = [];
+
+      for (const head of heads) {
+        let qty = 0;
+        if (head.computeRule === "fixed" || head.computeRule === "flat_per_unit") {
+          qty = 1;
+        } else if (head.computeRule === "per_sqft") {
+          qty = unit.carpetArea;
+        } else if (head.computeRule === "metered") {
+          qty = head.name === "Electricity" ? electricityConsumption(ui) : 0;
+          if (qty === 0) continue;
+        }
+        const rate = Number(head.rate);
+        const amount = round2(qty * rate);
+        const taxRule = head.taxRule as TaxRule;
+        const taxAmount = taxRule.type === "percentage"
+          ? round2(amount * (taxRule as { type: "percentage"; rate: number }).rate / 100)
+          : taxRule.type === "fixed"
+          ? round2((taxRule as { type: "fixed"; amount: number }).amount)
+          : 0;
+        lines.push({ headId: head.id, description: head.name, qty, rate, amount, taxAmount });
+      }
+
+      const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0));
+      const taxTotal = round2(lines.reduce((s, l) => s + l.taxAmount, 0));
+      const arrears = arrearsMap.get(unit.id) ?? 0;
+      const totalDue = round2(subtotal + taxTotal + arrears);
+
+      billSpecs.push({ societyId, unitId: unit.id, cycleId, dueDate, subtotal, taxTotal, arrearsCarryForward: arrears, totalDue });
+      lineSpecsByUnit.push(lines.map((l) => ({ ...l, societyId, billId: "" })));
+    }
+
+    // Bulk insert bills, then line items.
+    const insertedBills = await withTenantContext(db, societyId, (tx) => bulkInsertBills(tx, billSpecs));
+
+    const allLines: Array<{
+      societyId: string; billId: string; headId: string; description: string;
+      qty: number; rate: number; amount: number; taxAmount: number;
+    }> = [];
+    for (let i = 0; i < insertedBills.length; i++) {
+      const bill = insertedBills[i]!;
+      const lines = lineSpecsByUnit[i]!;
+      for (const l of lines) {
+        allLines.push({ ...l, billId: bill.id });
+      }
+    }
+    await withTenantContext(db, societyId, (tx) => bulkInsertBillLineItems(tx, allLines));
+
+    // Set bill statuses for non-draft cycles.
+    if (finalStatus !== "draft") {
+      for (let i = 0; i < insertedBills.length; i++) {
+        const bill = insertedBills[i]!;
+        const mod = i % 10;
+        let paidAmount = 0;
+        let status = "unpaid";
+
+        if (finalStatus === "closed") {
+          if (mod <= 7) {
+            paidAmount = Number(bill.totalDue);
+            status = "paid";
+          } else if (mod === 8) {
+            paidAmount = round2(Number(bill.totalDue) * 0.5);
+            status = "partial";
+          } else {
+            paidAmount = 0;
+            status = "overdue";
+          }
+        } else {
+          // published
+          if (mod <= 5) {
+            paidAmount = Number(bill.totalDue);
+            status = "paid";
+          } else if (mod <= 7) {
+            paidAmount = round2(Number(bill.totalDue) * 0.5);
+            status = "partial";
+          }
+        }
+
+        if (paidAmount > 0 || status !== "unpaid") {
+          await withTenantContext(db, societyId, (tx) =>
+            updateBillStatusAndPaid(tx, bill.id, paidAmount, status),
+          );
+        }
+      }
+    }
+
+    // Transition cycle to its final status.
+    if (finalStatus !== "draft" && cycle.status === "draft") {
+      await withTenantContext(db, societyId, (tx) =>
+        updateBillingCycleStatus(tx, cycleId, "published"),
+      );
+      if (finalStatus === "closed") {
+        await withTenantContext(db, societyId, (tx) =>
+          updateBillingCycleStatus(tx, cycleId, "closed"),
+        );
+      }
+    }
+  }
+}
+
 /**
  * Seeds one society with 10 towers, 500 units, ~2660 residents (including 10
  * landlords each owning 2 units), unit_resident links, ~600 parking spots, and
@@ -313,6 +538,9 @@ export async function seedFoundation(db: Database) {
   }
 
   await findOrCreateSeedAdmin(db, society.id);
+
+  // Billing: bill heads + 6 months of cycles with realistic paid/partial/overdue mix.
+  await seedBilling(db, society.id);
 
   return society;
 }

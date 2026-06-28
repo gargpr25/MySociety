@@ -2,9 +2,11 @@ import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { SmsProvider } from "@mysociety/config";
 import type { TenantAwareDb } from "./db.js";
+import { registerAdminBillingRoutes } from "./routes/admin-billing.js";
 import { registerAdminDirectoryRoutes } from "./routes/admin-directory.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerNoticeRoutes } from "./routes/notices.js";
+import { registerResidentBillingRoutes } from "./routes/resident-billing.js";
 
 export interface BuildAppOptions {
   tenantDb?: TenantAwareDb;
@@ -36,6 +38,14 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       jwtSecret: options.jwtSecret,
     });
     registerNoticeRoutes(app, {
+      tenantDb: options.tenantDb,
+      jwtSecret: options.jwtSecret,
+    });
+    registerAdminBillingRoutes(app, {
+      tenantDb: options.tenantDb,
+      jwtSecret: options.jwtSecret,
+    });
+    registerResidentBillingRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
     });

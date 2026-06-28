@@ -46,6 +46,30 @@ export type ResidentPrincipal = {
   societyId: string;
 };
 
+export type Bill = {
+  id: string;
+  unitId: string;
+  cycleId: string;
+  dueDate: string;
+  status: string;
+  subtotal: number;
+  taxTotal: number;
+  arrearsCarryForward: number;
+  totalDue: number;
+  paidAmount: number;
+  createdAt: string;
+};
+
+export type BillLineItem = {
+  id: string;
+  headId: string;
+  description: string;
+  qty: number;
+  rate: number;
+  amount: number;
+  taxAmount: number;
+};
+
 export const api = {
   loginRequest: (mobile: string) =>
     apiFetch<{ message: string }>("/auth/otp/request", {
@@ -67,4 +91,10 @@ export const api = {
   listNotices: () => apiFetch<Notice[]>("/resident/notices"),
 
   getNotice: (id: string) => apiFetch<Notice>(`/resident/notices/${id}`),
+
+  listBills: () => apiFetch<Bill[]>("/resident/bills"),
+
+  getBill: (id: string) => apiFetch<Bill & { lineItems: BillLineItem[] }>(`/resident/bills/${id}`),
+
+  invoicePdfUrl: (id: string) => `/api/resident/bills/${id}/invoice.pdf`,
 };

@@ -84,6 +84,69 @@ export type AdminPrincipal = {
   societyId: string;
 };
 
+export type BillHead = {
+  id: string;
+  societyId: string;
+  name: string;
+  computeRule: string;
+  rate: number;
+  taxRule: object;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BillingCycle = {
+  id: string;
+  societyId: string;
+  period: string;
+  dueDate: string;
+  status: string;
+  lateFeeRule: object;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Bill = {
+  id: string;
+  societyId: string;
+  unitId: string;
+  cycleId: string;
+  dueDate: string;
+  status: string;
+  subtotal: number;
+  taxTotal: number;
+  arrearsCarryForward: number;
+  totalDue: number;
+  paidAmount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BillLineItem = {
+  id: string;
+  billId: string;
+  headId: string;
+  description: string;
+  qty: number;
+  rate: number;
+  amount: number;
+  taxAmount: number;
+};
+
+export type CollectionSummary = {
+  period: string;
+  cycleId: string;
+  status: string;
+  totalBills: number;
+  paid: number;
+  partial: number;
+  overdue: number;
+  unpaid: number;
+  totalDue: number;
+  totalCollected: number;
+};
+
 export const api = {
   adminLoginRequest: (email: string) =>
     apiFetch<{ message: string }>("/auth/admin/login/request", {
@@ -127,4 +190,55 @@ export const api = {
   },
 
   downloadTemplate: () => fetch("/api/admin/residents/import/template"),
+
+  // ── Billing ────────────────────────────────────────────────────────────────
+
+  listBillHeads: () => apiFetch<BillHead[]>("/admin/billing/heads"),
+
+  createBillHead: (input: { name: string; computeRule: string; rate: number; taxRule?: object }) =>
+    apiFetch<BillHead>("/admin/billing/heads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  updateBillHead: (id: string, input: Partial<{ name: string; computeRule: string; rate: number; isActive: boolean }>) =>
+    apiFetch<BillHead>(`/admin/billing/heads/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  deleteBillHead: (id: string) =>
+    fetch(`/api/admin/billing/heads/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${getToken()}` },
+    }),
+
+  listBillingCycles: () => apiFetch<BillingCycle[]>("/admin/billing/cycles"),
+
+  createBillingCycle: (input: { period: string; dueDate: string }) =>
+    apiFetch<BillingCycle>("/admin/billing/cycles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  generateBills: (cycleId: string) =>
+    apiFetch<{ billsGenerated: number }>(`/admin/billing/cycles/${cycleId}/generate`, { method: "POST" }),
+
+  publishCycle: (cycleId: string) =>
+    apiFetch<BillingCycle>(`/admin/billing/cycles/${cycleId}/publish`, { method: "POST" }),
+
+  closeCycle: (cycleId: string) =>
+    apiFetch<BillingCycle>(`/admin/billing/cycles/${cycleId}/close`, { method: "POST" }),
+
+  getCycleSummary: (cycleId: string) =>
+    apiFetch<CollectionSummary>(`/admin/billing/cycles/${cycleId}/summary`),
+
+  listCycleBills: (cycleId: string) =>
+    apiFetch<Bill[]>(`/admin/billing/cycles/${cycleId}/bills`),
+
+  getBill: (billId: string) =>
+    apiFetch<Bill & { lineItems: BillLineItem[]; unit: Unit | null }>(`/admin/billing/bills/${billId}`),
 };

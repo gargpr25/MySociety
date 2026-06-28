@@ -37,7 +37,6 @@ afterAll(async () => {
 describe("seedFoundation", () => {
   it("creates 10 towers and 500 units, and is idempotent on re-run", async () => {
     const db = createDb(appPool);
-
     const first = await seedFoundation(db);
     const second = await seedFoundation(db);
     expect(second.id).toBe(first.id);
@@ -57,7 +56,7 @@ describe("seedFoundation", () => {
       expect(towers).toHaveLength(10);
       expect(units).toHaveLength(500);
     });
-  });
+  }, 120_000);
 
   it("seeds ~2660 residents with unit_resident links and a society_admin", async () => {
     const db = createDb(appPool);

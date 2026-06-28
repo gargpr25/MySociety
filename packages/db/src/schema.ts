@@ -84,6 +84,68 @@ export const parkingSpots = pgTable("parking_spots", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const billHeads = pgTable("bill_heads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  name: text("name").notNull(),
+  computeRule: text("compute_rule").notNull(),
+  rate: numeric("rate", { mode: "number" }).notNull().default(0),
+  taxRule: jsonb("tax_rule").notNull().default({ type: "none" }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const meterReadings = pgTable("meter_readings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  unitId: uuid("unit_id").notNull(),
+  headId: uuid("head_id").notNull(),
+  period: text("period").notNull(),
+  prevReading: numeric("prev_reading", { mode: "number" }).notNull().default(0),
+  currentReading: numeric("current_reading", { mode: "number" }).notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const billingCycles = pgTable("billing_cycles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  period: text("period").notNull(),
+  dueDate: text("due_date").notNull(),
+  status: text("status").notNull().default("draft"),
+  lateFeeRule: jsonb("late_fee_rule").notNull().default({ type: "none" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const bills = pgTable("bills", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  unitId: uuid("unit_id").notNull(),
+  cycleId: uuid("cycle_id").notNull(),
+  dueDate: text("due_date").notNull(),
+  status: text("status").notNull().default("unpaid"),
+  subtotal: numeric("subtotal", { mode: "number" }).notNull().default(0),
+  taxTotal: numeric("tax_total", { mode: "number" }).notNull().default(0),
+  arrearsCarryForward: numeric("arrears_carry_forward", { mode: "number" }).notNull().default(0),
+  totalDue: numeric("total_due", { mode: "number" }).notNull().default(0),
+  paidAmount: numeric("paid_amount", { mode: "number" }).notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const billLineItems = pgTable("bill_line_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  billId: uuid("bill_id").notNull(),
+  headId: uuid("head_id").notNull(),
+  description: text("description").notNull(),
+  qty: numeric("qty", { mode: "number" }).notNull().default(1),
+  rate: numeric("rate", { mode: "number" }).notNull().default(0),
+  amount: numeric("amount", { mode: "number" }).notNull().default(0),
+  taxAmount: numeric("tax_amount", { mode: "number" }).notNull().default(0),
+});
+
 export const notices = pgTable("notices", {
   id: uuid("id").primaryKey().defaultRandom(),
   societyId: uuid("society_id").notNull(),
