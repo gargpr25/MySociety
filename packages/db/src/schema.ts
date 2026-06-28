@@ -349,3 +349,16 @@ export const chatMessages = pgTable("chat_messages", {
   metadata: jsonb("metadata").notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const dispatchLogs = pgTable("dispatch_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  integrationId: uuid("integration_id").notNull(),
+  eventType: text("event_type").notNull(),
+  status: text("status").notNull(),
+  attemptCount: integer("attempt_count").notNull().default(1),
+  payload: jsonb("payload").notNull().default({}),
+  responseBody: text("response_body"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

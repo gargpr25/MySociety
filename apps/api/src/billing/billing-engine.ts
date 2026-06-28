@@ -28,6 +28,8 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+export type SkippedUnit = { unitId: string; reason: string };
+
 /**
  * Generates (or regenerates) all bills for a billing cycle. Idempotent when
  * the cycle is still in 'draft' status — existing bills are deleted and
@@ -39,7 +41,7 @@ export async function generateBillsForCycle(
   db: Database,
   societyId: string,
   cycleId: string,
-): Promise<{ billsGenerated: number }> {
+): Promise<{ billsGenerated: number; skipped: SkippedUnit[] }> {
   const cycle = await findBillingCycleById(db, cycleId);
   if (!cycle) throw new Error(`Billing cycle ${cycleId} not found`);
   if (cycle.status !== "draft") {
@@ -101,8 +103,16 @@ export async function generateBillsForCycle(
 
   const billSpecs: BillSpec[] = [];
   const lineSpecsByUnitIndex: Array<LineSpec[]> = [];
+  const skipped: SkippedUnit[] = [];
+
+  const allMetered = heads.length > 0 && heads.every((h) => h.computeRule === "metered");
 
   for (const unit of allUnits) {
+    if (heads.length === 0) {
+      skipped.push({ unitId: unit.id, reason: "no active bill heads" });
+      continue;
+    }
+
     const lineItems: Array<Omit<LineSpec, "billId" | "societyId">> = [];
 
     for (const head of heads) {
@@ -126,6 +136,11 @@ export async function generateBillsForCycle(
         amount,
         taxAmount,
       });
+    }
+
+    if (allMetered && lineItems.length === 0) {
+      skipped.push({ unitId: unit.id, reason: "no meter readings for this period" });
+      continue;
     }
 
     const subtotal = round2(lineItems.reduce((s, l) => s + l.amount, 0));
@@ -161,5 +176,5 @@ export async function generateBillsForCycle(
   }
   await bulkInsertBillLineItems(db, allLineSpecs);
 
-  return { billsGenerated: insertedBills.length };
+  return { billsGenerated: insertedBills.length, skipped };
 }

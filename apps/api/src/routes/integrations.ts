@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   createIntegrationConfig,
   findIntegrationConfigById,
+  listDispatchLogsByIntegration,
   listIntegrationConfigs,
   updateIntegrationConfig,
 } from "@mysociety/db";
@@ -103,5 +104,26 @@ export function registerIntegrationRoutes(app: FastifyInstance, options: Integra
     if (!updated) return reply.code(404).send({ error: "Not found" });
 
     return reply.send(serializeConfig(updated));
+  });
+
+  app.get("/admin/connectors/:id/logs", { preHandler }, async (request, reply) => {
+    const societyId = request.principal?.societyId;
+    if (!societyId) return reply.code(400).send({ error: "Admin account is not scoped to a society" });
+
+    const { id } = request.params as { id: string };
+    const existing = await tenantDb.withTenant(societyId, (db) => findIntegrationConfigById(db, id));
+    if (!existing) return reply.code(404).send({ error: "Integration config not found" });
+
+    const logs = await tenantDb.withTenant(societyId, (db) => listDispatchLogsByIntegration(db, id));
+    return reply.send(logs.map((l) => ({
+      id: l.id,
+      integrationId: l.integrationId,
+      eventType: l.eventType,
+      status: l.status,
+      attemptCount: l.attemptCount,
+      responseBody: l.responseBody,
+      errorMessage: l.errorMessage,
+      createdAt: l.createdAt.toISOString(),
+    })));
   });
 }

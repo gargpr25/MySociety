@@ -10,10 +10,12 @@ import {
   findPreviousBillingCycle,
   findUnitById,
   getCollectionSummary,
+  listActiveBillHeads,
   listBillHeads,
   listBillingCycles,
   listBillsByCycleId,
   listLineItemsByBillId,
+  listUnits,
   markOverdueBills,
   updateBillHead,
   updateBillingCycleStatus,
@@ -116,6 +118,32 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
       createBillingCycle(db, { societyId, ...parsed.data }),
     );
     return reply.code(201).send(serializeCycle(cycle!));
+  });
+
+  // Estimate bill count before generating — dry run, no writes
+  app.get("/admin/billing/cycles/:id/estimate", { preHandler }, async (request, reply) => {
+    const societyId = request.principal?.societyId;
+    if (!societyId) return reply.code(400).send({ error: "Admin account is not scoped to a society" });
+
+    const { id } = request.params as { id: string };
+    const cycle = await options.tenantDb.withTenant(societyId, (db) => findBillingCycleById(db, id));
+    if (!cycle) return reply.code(404).send({ error: "Billing cycle not found" });
+
+    const [units, heads] = await options.tenantDb.withTenant(societyId, async (db) => {
+      const u = await listUnits(db);
+      const h = await listActiveBillHeads(db);
+      return [u, h] as const;
+    });
+
+    const hasMeteredHeads = heads.some((h) => h.computeRule === "metered");
+
+    return reply.send({
+      cycleId: id,
+      period: cycle.period,
+      eligibleUnits: units.length,
+      activeHeads: heads.length,
+      hasMeteredHeads,
+    });
   });
 
   // Generate bills for a cycle (idempotent for draft cycles)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type IntegrationConfig } from "../lib/api";
+import { api, type DispatchLog, type IntegrationConfig } from "../lib/api";
 
 const EVENT_OPTIONS = [
   { value: "bill.generated", label: "Bill Generated" },
@@ -15,6 +15,9 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [msg, setMsg] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<Record<string, DispatchLog[]>>({});
+  const [logsLoading, setLogsLoading] = useState<string | null>(null);
 
   // Form state
   const [connectorType, setConnectorType] = useState<"generic_webhook" | "csv_export">("generic_webhook");
@@ -37,6 +40,25 @@ export default function IntegrationsPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function toggleExpand(id: string) {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(id);
+    if (!logs[id]) {
+      setLogsLoading(id);
+      try {
+        const data = await api.listConnectorLogs(id);
+        setLogs((prev) => ({ ...prev, [id]: data }));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLogsLoading(null);
+      }
+    }
+  }
 
   function toggleEvent(evt: string) {
     setEnabledEvents((prev) =>
@@ -153,6 +175,7 @@ export default function IntegrationsPage() {
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead><tr style={{ background: "#f5f5f5" }}>
+            <th style={{ padding: "0.5rem", textAlign: "left", width: 24 }}></th>
             <th style={{ padding: "0.5rem", textAlign: "left" }}>Type</th>
             <th style={{ padding: "0.5rem", textAlign: "left" }}>Events</th>
             <th style={{ padding: "0.5rem", textAlign: "left" }}>Credentials</th>
@@ -161,26 +184,81 @@ export default function IntegrationsPage() {
           </tr></thead>
           <tbody>
             {configs.map((c) => (
-              <tr key={c.id} style={{ borderTop: "1px solid #eee" }}>
-                <td style={{ padding: "0.5rem", fontFamily: "monospace", fontSize: 12 }}>{c.connectorType}</td>
-                <td style={{ padding: "0.5rem", fontSize: 12 }}>
-                  {(c.enabledEvents as string[]).join(", ")}
-                </td>
-                <td style={{ padding: "0.5rem" }}>
-                  {c.hasCredentials ? <span style={{ color: "#16a34a" }}>Stored (encrypted)</span> : <span style={{ color: "#6b7280" }}>None</span>}
-                </td>
-                <td style={{ padding: "0.5rem" }}>
-                  <span style={{ color: c.isActive ? "#16a34a" : "#6b7280" }}>{c.isActive ? "Active" : "Inactive"}</span>
-                </td>
-                <td style={{ padding: "0.5rem" }}>
-                  <button
-                    onClick={() => handleToggleActive(c)}
-                    style={{ fontSize: 12, padding: "2px 8px", color: c.isActive ? "#dc2626" : "#16a34a" }}
-                  >
-                    {c.isActive ? "Disable" : "Enable"}
-                  </button>
-                </td>
-              </tr>
+              <>
+                <tr
+                  key={c.id}
+                  style={{ borderTop: "1px solid #eee", cursor: "pointer" }}
+                  onClick={() => toggleExpand(c.id)}
+                >
+                  <td style={{ padding: "0.5rem", color: "#6b7280" }}>
+                    {expandedId === c.id ? "▾" : "▸"}
+                  </td>
+                  <td style={{ padding: "0.5rem", fontFamily: "monospace", fontSize: 12 }}>{c.connectorType}</td>
+                  <td style={{ padding: "0.5rem", fontSize: 12 }}>
+                    {(c.enabledEvents as string[]).join(", ")}
+                  </td>
+                  <td style={{ padding: "0.5rem" }}>
+                    {c.hasCredentials ? <span style={{ color: "#16a34a" }}>Stored (encrypted)</span> : <span style={{ color: "#6b7280" }}>None</span>}
+                  </td>
+                  <td style={{ padding: "0.5rem" }}>
+                    <span style={{ color: c.isActive ? "#16a34a" : "#6b7280" }}>{c.isActive ? "Active" : "Inactive"}</span>
+                  </td>
+                  <td style={{ padding: "0.5rem" }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleToggleActive(c)}
+                      style={{ fontSize: 12, padding: "2px 8px", color: c.isActive ? "#dc2626" : "#16a34a" }}
+                    >
+                      {c.isActive ? "Disable" : "Enable"}
+                    </button>
+                  </td>
+                </tr>
+                {expandedId === c.id && (
+                  <tr key={`${c.id}-logs`} style={{ background: "#fafafa" }}>
+                    <td colSpan={6} style={{ padding: "0.75rem 1.5rem" }}>
+                      <p style={{ fontWeight: 600, marginBottom: "0.5rem", fontSize: 13 }}>Dispatch Logs (last 50)</p>
+                      {logsLoading === c.id ? (
+                        <p style={{ color: "#6b7280", fontSize: 13 }}>Loading logs…</p>
+                      ) : !logs[c.id] || logs[c.id].length === 0 ? (
+                        <p style={{ color: "#6b7280", fontSize: 13 }}>No dispatches recorded yet.</p>
+                      ) : (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: "#f0f0f0" }}>
+                              <th style={{ padding: "0.3rem 0.5rem", textAlign: "left" }}>Time</th>
+                              <th style={{ padding: "0.3rem 0.5rem", textAlign: "left" }}>Event</th>
+                              <th style={{ padding: "0.3rem 0.5rem", textAlign: "left" }}>Status</th>
+                              <th style={{ padding: "0.3rem 0.5rem", textAlign: "left" }}>Attempts</th>
+                              <th style={{ padding: "0.3rem 0.5rem", textAlign: "left" }}>Detail</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {logs[c.id].map((log) => (
+                              <tr key={log.id} style={{ borderTop: "1px solid #e5e7eb" }}>
+                                <td style={{ padding: "0.3rem 0.5rem", color: "#6b7280" }}>
+                                  {new Date(log.createdAt).toLocaleString()}
+                                </td>
+                                <td style={{ padding: "0.3rem 0.5rem", fontFamily: "monospace" }}>{log.eventType}</td>
+                                <td style={{ padding: "0.3rem 0.5rem" }}>
+                                  <span style={{
+                                    color: log.status === "success" ? "#16a34a" : "#dc2626",
+                                    fontWeight: 600,
+                                  }}>
+                                    {log.status}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "0.3rem 0.5rem", textAlign: "center" }}>{log.attemptCount}</td>
+                                <td style={{ padding: "0.3rem 0.5rem", color: "#6b7280", fontFamily: "monospace", fontSize: 11 }}>
+                                  {log.errorMessage ?? log.responseBody ?? "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </>
             ))}
           </tbody>
         </table>

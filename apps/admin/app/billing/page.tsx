@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type BillHead, type BillingCycle, type CyclePreview } from "../lib/api";
+import { api, type BillHead, type BillingCycle, type CycleEstimate, type CyclePreview } from "../lib/api";
 
 const th: React.CSSProperties = { padding: "0.5rem", textAlign: "left", borderBottom: "1px solid #ddd" };
 const td: React.CSSProperties = { padding: "0.5rem", borderBottom: "1px solid #eee" };
@@ -15,6 +15,11 @@ export default function BillingPage() {
   const [preview, setPreview] = useState<CyclePreview | null>(null);
   const [previewCycleId, setPreviewCycleId] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [estimate, setEstimate] = useState<CycleEstimate | null>(null);
+  const [estimateCycleId, setEstimateCycleId] = useState<string | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
+  const [skipped, setSkipped] = useState<Array<{ unitId: string; reason: string }> | null>(null);
+  const [generateLoading, setGenerateLoading] = useState(false);
 
   // New bill head form
   const [newHead, setNewHead] = useState({ name: "", computeRule: "fixed", rate: 0 });
@@ -59,12 +64,34 @@ export default function BillingPage() {
     }
   }
 
+  async function openEstimate(cycleId: string) {
+    setEstimateLoading(true);
+    setEstimateCycleId(cycleId);
+    setEstimate(null);
+    setSkipped(null);
+    setError("");
+    try {
+      const data = await api.estimateCycle(cycleId);
+      setEstimate(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error loading estimate");
+    } finally {
+      setEstimateLoading(false);
+    }
+  }
+
   async function generateBills(cycleId: string) {
+    setGenerateLoading(true);
     try {
       const r = await api.generateBills(cycleId);
-      setMsg(`Generated ${r.billsGenerated} bills`);
+      setMsg(`Generated ${r.billsGenerated} bills${r.skipped.length > 0 ? ` (${r.skipped.length} units skipped)` : ""}`);
+      setSkipped(r.skipped.length > 0 ? r.skipped : null);
+      setEstimate(null);
+      setEstimateCycleId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setGenerateLoading(false);
     }
   }
 
@@ -162,6 +189,73 @@ export default function BillingPage() {
         </fieldset>
       </section>
 
+      {/* Skipped units report */}
+      {skipped && skipped.length > 0 && (
+        <div style={{ border: "1px solid #fcd34d", borderRadius: 8, padding: "1rem", marginBottom: "1.5rem", background: "#fffbeb" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <p style={{ fontWeight: 600, margin: 0, color: "#92400e" }}>⚠ {skipped.length} units skipped during generation</p>
+            <button onClick={() => setSkipped(null)} style={{ fontSize: 12, background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}>✕</button>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead><tr style={{ background: "#fef3c7" }}>
+              <th style={{ padding: "0.3rem 0.5rem", textAlign: "left" }}>Unit ID</th>
+              <th style={{ padding: "0.3rem 0.5rem", textAlign: "left" }}>Reason</th>
+            </tr></thead>
+            <tbody>
+              {skipped.map((s) => (
+                <tr key={s.unitId} style={{ borderTop: "1px solid #fde68a" }}>
+                  <td style={{ padding: "0.3rem 0.5rem", fontFamily: "monospace", fontSize: 11 }}>{s.unitId}</td>
+                  <td style={{ padding: "0.3rem 0.5rem", color: "#92400e" }}>{s.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Generate estimate panel */}
+      {estimateCycleId && (
+        <div style={{ border: "1px solid #bfdbfe", borderRadius: 8, padding: "1.25rem", marginBottom: "1.5rem", background: "#eff6ff" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <h3 style={{ margin: 0 }}>Pre-Generate Estimate — {estimate?.period ?? "…"}</h3>
+            <button onClick={() => { setEstimate(null); setEstimateCycleId(null); }} style={{ fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer" }}>✕ Cancel</button>
+          </div>
+          {estimateLoading ? (
+            <p style={{ color: "#6b7280" }}>Loading estimate…</p>
+          ) : estimate ? (
+            <>
+              <div style={{ display: "flex", gap: "1rem", marginBottom: "0.75rem", flexWrap: "wrap" }}>
+                <div style={{ background: "#fff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "0.5rem 0.75rem", minWidth: 140 }}>
+                  <div style={{ fontSize: 11, color: "#6b7280" }}>Eligible units</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{estimate.eligibleUnits}</div>
+                </div>
+                <div style={{ background: "#fff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "0.5rem 0.75rem", minWidth: 140 }}>
+                  <div style={{ fontSize: 11, color: "#6b7280" }}>Active bill heads</div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{estimate.activeHeads}</div>
+                </div>
+                {estimate.hasMeteredHeads && (
+                  <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 6, padding: "0.5rem 0.75rem", minWidth: 200 }}>
+                    <div style={{ fontSize: 11, color: "#92400e" }}>Has metered heads</div>
+                    <div style={{ fontSize: 12, color: "#92400e", marginTop: 2 }}>Units without meter readings will be skipped</div>
+                  </div>
+                )}
+              </div>
+              {estimate.activeHeads === 0 ? (
+                <p style={{ color: "#dc2626", fontSize: 13 }}>No active bill heads — add at least one bill head before generating.</p>
+              ) : (
+                <button
+                  onClick={() => generateBills(estimateCycleId!)}
+                  disabled={generateLoading}
+                  style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "0.4rem 1rem", cursor: generateLoading ? "wait" : "pointer", fontWeight: 600 }}
+                >
+                  {generateLoading ? "Generating…" : `Generate Bills for ${estimate.eligibleUnits} Units`}
+                </button>
+              )}
+            </>
+          ) : null}
+        </div>
+      )}
+
       {/* Publish preview panel */}
       {previewCycleId && (
         <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "1.25rem", marginBottom: "1.5rem", background: "#fafafa" }}>
@@ -232,7 +326,12 @@ export default function BillingPage() {
                 <td style={{ ...td, display: "flex", gap: "0.4rem" }}>
                   {c.status === "draft" && (
                     <>
-                      <button onClick={() => generateBills(c.id)} style={{ fontSize: "0.8rem" }}>Generate</button>
+                      <button
+                        onClick={() => openEstimate(c.id)}
+                        style={{ fontSize: "0.8rem", background: estimateCycleId === c.id ? "#dbeafe" : undefined }}
+                      >
+                        Generate…
+                      </button>
                       <button
                         onClick={() => openPublishPreview(c.id)}
                         style={{ fontSize: "0.8rem", background: previewCycleId === c.id ? "#f3f4f6" : undefined }}

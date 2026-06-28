@@ -128,6 +128,14 @@ export type CyclePreview = {
   changePercent: number | null;
 };
 
+export type CycleEstimate = {
+  cycleId: string;
+  period: string;
+  eligibleUnits: number;
+  activeHeads: number;
+  hasMeteredHeads: boolean;
+};
+
 export type Bill = {
   id: string;
   societyId: string;
@@ -249,8 +257,11 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  estimateCycle: (cycleId: string) =>
+    apiFetch<CycleEstimate>(`/admin/billing/cycles/${cycleId}/estimate`),
+
   generateBills: (cycleId: string) =>
-    apiFetch<{ billsGenerated: number }>(`/admin/billing/cycles/${cycleId}/generate`, { method: "POST" }),
+    apiFetch<{ billsGenerated: number; skipped: Array<{ unitId: string; reason: string }> }>(`/admin/billing/cycles/${cycleId}/generate`, { method: "POST" }),
 
   previewCycle: (cycleId: string) =>
     apiFetch<CyclePreview>(`/admin/billing/cycles/${cycleId}/preview`),
@@ -330,6 +341,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     }),
+
+  listConnectorLogs: (id: string) => apiFetch<DispatchLog[]>(`/admin/connectors/${id}/logs`),
 
   // ── Tickets ────────────────────────────────────────────────────────────────
 
@@ -526,4 +539,15 @@ export type IntegrationConfig = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type DispatchLog = {
+  id: string;
+  integrationId: string;
+  eventType: string;
+  status: "success" | "failed";
+  attemptCount: number;
+  responseBody: string | null;
+  errorMessage: string | null;
+  createdAt: string;
 };

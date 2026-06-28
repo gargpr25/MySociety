@@ -12,6 +12,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 type RecoveredPayment = { id: string; providerOrderId: string; providerPaymentId: string; amountRupees: number };
 
+const POLL_INTERVAL_MS = 30_000;
+
 export default function AdminPaymentsPage() {
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -19,11 +21,37 @@ export default function AdminPaymentsPage() {
   const [reconciling, setReconciling] = useState(false);
   const [reconResult, setReconResult] = useState<{ reconciled: number; checked: number; recoveredPayments: RecoveredPayment[] } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [secondsSince, setSecondsSince] = useState(0);
+
+  async function loadPayments() {
+    if (!getToken()) { router.replace("/login"); return; }
+    try {
+      const data = await api.listPayments();
+      setPayments(data);
+      setLastUpdated(new Date());
+      setSecondsSince(0);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error");
+    }
+  }
 
   useEffect(() => {
-    if (!getToken()) { router.replace("/login"); return; }
-    api.listPayments().then(setPayments).catch((e: Error) => setError(e.message));
-  }, [router]);
+    loadPayments();
+    const poll = setInterval(loadPayments, POLL_INTERVAL_MS);
+    return () => clearInterval(poll);
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => loadPayments();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  useEffect(() => {
+    const ticker = setInterval(() => setSecondsSince((s) => s + 1), 1000);
+    return () => clearInterval(ticker);
+  }, []);
 
   async function reconcile() {
     setReconciling(true);
@@ -31,8 +59,7 @@ export default function AdminPaymentsPage() {
     try {
       const result = await api.reconcilePayments();
       setReconResult(result);
-      const updated = await api.listPayments();
-      setPayments(updated);
+      await loadPayments();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -55,7 +82,14 @@ export default function AdminPaymentsPage() {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-        <h1 style={{ fontSize: "1.3rem", margin: 0 }}>Payments</h1>
+        <div>
+          <h1 style={{ fontSize: "1.3rem", margin: 0 }}>Payments</h1>
+          {lastUpdated && (
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>
+              Updated {secondsSince < 5 ? "just now" : `${secondsSince}s ago`} · auto-refreshes every 30s
+            </span>
+          )}
+        </div>
         <button
           onClick={reconcile}
           disabled={reconciling}

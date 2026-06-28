@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, type StaffMember, type Ticket, type TicketEvent } from "../lib/api";
 import { Combobox, type ComboboxOption } from "../components/Combobox";
 
@@ -38,6 +38,8 @@ type ExpandedData = {
   saving: boolean;
 };
 
+const POLL_INTERVAL_MS = 30_000;
+
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
@@ -49,15 +51,33 @@ export default function TicketsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedData, setExpandedData] = useState<Record<string, ExpandedData>>({});
 
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAssignTo, setBulkAssignTo] = useState("");
+  const [bulkMsg, setBulkMsg] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  // Live polling
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [secondsSince, setSecondsSince] = useState(0);
+  const filterRef = useRef({ statusFilter, typeFilter });
+
+  useEffect(() => {
+    filterRef.current = { statusFilter, typeFilter };
+  }, [statusFilter, typeFilter]);
+
   async function load() {
     setLoading(true);
     try {
+      const { statusFilter: sf, typeFilter: tf } = filterRef.current;
       const params: Record<string, string> = {};
-      if (statusFilter) params.status = statusFilter;
-      if (typeFilter) params.type = typeFilter;
+      if (sf) params.status = sf;
+      if (tf) params.type = tf;
       const [data, staffList] = await Promise.all([api.listTickets(params), api.listStaff()]);
       setTickets(data);
       setStaff(staffList);
+      setLastUpdated(new Date());
+      setSecondsSince(0);
     } catch (e) {
       console.error(e);
     } finally {
@@ -65,7 +85,32 @@ export default function TicketsPage() {
     }
   }
 
-  useEffect(() => { load(); }, [statusFilter, typeFilter]);
+  // Initial load + poll
+  useEffect(() => {
+    load();
+    const poll = setInterval(load, POLL_INTERVAL_MS);
+    return () => clearInterval(poll);
+  }, []);
+
+  // Reload when filters change
+  useEffect(() => {
+    load();
+  }, [statusFilter, typeFilter]);
+
+  // Tick "seconds since" counter
+  useEffect(() => {
+    const ticker = setInterval(() => {
+      setSecondsSince((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, []);
+
+  // Refresh on tab focus
+  useEffect(() => {
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   async function handleCheckSla() {
     try {
@@ -140,10 +185,79 @@ export default function TicketsPage() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === tickets.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(tickets.map((t) => t.id)));
+    }
+  }
+
+  async function handleBulkAssign() {
+    if (!bulkAssignTo || selectedIds.size === 0) return;
+    setBulkSaving(true);
+    setBulkMsg("");
+    const ids = Array.from(selectedIds);
+    let success = 0;
+    for (const id of ids) {
+      try {
+        await api.assignTicket(id, bulkAssignTo);
+        success++;
+      } catch {
+        // continue
+      }
+    }
+    const staffName = staff.find((s) => s.id === bulkAssignTo)?.name ?? "staff";
+    setBulkMsg(`Assigned ${success}/${ids.length} tickets to ${staffName}`);
+    setBulkSaving(false);
+    setSelectedIds(new Set());
+    setBulkAssignTo("");
+    await load();
+  }
+
+  async function handleBulkClose() {
+    if (selectedIds.size === 0) return;
+    setBulkSaving(true);
+    setBulkMsg("");
+    const ids = Array.from(selectedIds);
+    let success = 0;
+    for (const id of ids) {
+      try {
+        await api.updateTicketStatus(id, "closed");
+        success++;
+      } catch {
+        // continue
+      }
+    }
+    setBulkMsg(`Closed ${success}/${ids.length} tickets`);
+    setBulkSaving(false);
+    setSelectedIds(new Set());
+    await load();
+  }
+
+  const allSelected = tickets.length > 0 && selectedIds.size === tickets.length;
+  const someSelected = selectedIds.size > 0;
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h1 style={{ margin: 0 }}>Tickets</h1>
+        <div>
+          <h1 style={{ margin: 0 }}>Tickets</h1>
+          {lastUpdated && (
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>
+              Updated {secondsSince < 5 ? "just now" : `${secondsSince}s ago`} · auto-refreshes every 30s
+            </span>
+          )}
+        </div>
         <button onClick={handleCheckSla} style={{ padding: "0.4rem 0.8rem" }}>Check SLA Breaches</button>
       </div>
       {slaMsg && <p style={{ color: "#7c3aed" }}>{slaMsg}</p>}
@@ -167,7 +281,7 @@ export default function TicketsPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", alignItems: "center" }}>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="">All statuses</option>
           {["open", "assigned", "in_progress", "resolved", "closed", "reopened"].map((s) => (
@@ -179,10 +293,67 @@ export default function TicketsPage() {
           <option value="complaint">complaint</option>
           <option value="request">request</option>
         </select>
-        <button onClick={load} disabled={loading}>Refresh</button>
+        <button onClick={load} disabled={loading}>{loading ? "…" : "Refresh"}</button>
+        {tickets.length > 0 && (
+          <span style={{ marginLeft: "auto", fontSize: 13, color: "#6b7280" }}>{tickets.length} ticket{tickets.length !== 1 ? "s" : ""}</span>
+        )}
       </div>
 
-      {loading ? (
+      {/* Bulk action bar */}
+      {someSelected && (
+        <div style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          background: "#1e293b",
+          color: "#f1f5f9",
+          borderRadius: 8,
+          padding: "0.6rem 1rem",
+          marginBottom: "0.75rem",
+          display: "flex",
+          gap: "0.75rem",
+          alignItems: "center",
+          flexWrap: "wrap",
+          boxShadow: "0 4px 6px -1px rgba(0,0,0,0.3)",
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{selectedIds.size} selected</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginLeft: "0.5rem" }}>
+            <span style={{ fontSize: 13 }}>Assign to:</span>
+            <div style={{ width: 220 }}>
+              <Combobox
+                options={staff.map((s): ComboboxOption => ({ id: s.id, label: s.name, sublabel: s.email }))}
+                value={bulkAssignTo}
+                onChange={setBulkAssignTo}
+                placeholder="Search staff…"
+                disabled={bulkSaving}
+              />
+            </div>
+            <button
+              onClick={handleBulkAssign}
+              disabled={!bulkAssignTo || bulkSaving}
+              style={{ fontSize: 12, padding: "3px 10px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
+            >
+              Apply
+            </button>
+          </div>
+          <button
+            onClick={handleBulkClose}
+            disabled={bulkSaving}
+            style={{ fontSize: 12, padding: "3px 10px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
+          >
+            Close all
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            style={{ fontSize: 12, marginLeft: "auto", background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}
+          >
+            ✕ Clear
+          </button>
+          {bulkMsg && <span style={{ fontSize: 13, color: "#86efac" }}>{bulkMsg}</span>}
+        </div>
+      )}
+
+      {loading && tickets.length === 0 ? (
         <p>Loading…</p>
       ) : tickets.length === 0 ? (
         <p>No tickets.</p>
@@ -190,6 +361,14 @@ export default function TicketsPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr style={{ background: "#f5f5f5" }}>
+              <th style={{ padding: "0.5rem", width: 36, textAlign: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  title={allSelected ? "Deselect all" : "Select all"}
+                />
+              </th>
               <th style={{ padding: "0.5rem", textAlign: "left", width: 20 }}></th>
               <th style={{ padding: "0.5rem", textAlign: "left" }}>Status</th>
               <th style={{ padding: "0.5rem", textAlign: "left" }}>Category / Type</th>
@@ -204,42 +383,50 @@ export default function TicketsPage() {
               const isExpanded = expandedId === t.id;
               const d = expandedData[t.id];
               const allowedStatuses = NEXT_STATUSES[t.status] ?? [];
+              const isSelected = selectedIds.has(t.id);
 
               return (
                 <>
                   <tr
                     key={t.id}
-                    onClick={() => expandRow(t.id)}
                     style={{
                       borderTop: "1px solid #eee",
-                      background: isExpanded ? "#f0f9ff" : t.slaBreached ? "#fff5f5" : undefined,
-                      cursor: "pointer",
+                      background: isSelected ? "#eff6ff" : isExpanded ? "#f0f9ff" : t.slaBreached ? "#fff5f5" : undefined,
                     }}
                   >
-                    <td style={{ padding: "0.5rem", color: "#9ca3af", fontSize: 10 }}>{isExpanded ? "▾" : "▸"}</td>
-                    <td style={{ padding: "0.5rem" }}>
+                    <td style={{ padding: "0.5rem", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(t.id)}
+                      />
+                    </td>
+                    <td style={{ padding: "0.5rem", color: "#9ca3af", fontSize: 10, cursor: "pointer" }} onClick={() => expandRow(t.id)}>
+                      {isExpanded ? "▾" : "▸"}
+                    </td>
+                    <td style={{ padding: "0.5rem", cursor: "pointer" }} onClick={() => expandRow(t.id)}>
                       <span style={{ background: STATUS_COLORS[t.status] ?? "#999", color: "#fff", borderRadius: 4, padding: "2px 6px", fontSize: 12 }}>
                         {t.status}
                       </span>
                     </td>
-                    <td style={{ padding: "0.5rem" }}>{t.category} / {t.type}</td>
-                    <td style={{ padding: "0.5rem" }}>
+                    <td style={{ padding: "0.5rem", cursor: "pointer" }} onClick={() => expandRow(t.id)}>{t.category} / {t.type}</td>
+                    <td style={{ padding: "0.5rem", cursor: "pointer" }} onClick={() => expandRow(t.id)}>
                       <span style={{ color: PRIORITY_COLORS[t.priority] ?? "#999", fontWeight: 600 }}>{t.priority}</span>
                     </td>
-                    <td style={{ padding: "0.5rem", color: t.slaBreached ? "#dc2626" : undefined }}>
+                    <td style={{ padding: "0.5rem", color: t.slaBreached ? "#dc2626" : undefined, cursor: "pointer" }} onClick={() => expandRow(t.id)}>
                       {t.slaBreached ? "⚠ BREACHED" : t.slaDueAt ? new Date(t.slaDueAt).toLocaleString() : "—"}
                     </td>
-                    <td style={{ padding: "0.5rem" }}>
+                    <td style={{ padding: "0.5rem", cursor: "pointer" }} onClick={() => expandRow(t.id)}>
                       {t.assignedTo ? (staff.find((s) => s.id === t.assignedTo)?.name ?? t.assignedTo.slice(0, 8) + "…") : "—"}
                     </td>
-                    <td style={{ padding: "0.5rem", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "0.5rem", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => expandRow(t.id)}>
                       {t.description}
                     </td>
                   </tr>
 
                   {isExpanded && (
                     <tr key={`${t.id}-expanded`} style={{ background: "#f8fbff" }}>
-                      <td colSpan={7} style={{ padding: "1rem 1.5rem", borderTop: "1px solid #bfdbfe" }}>
+                      <td colSpan={8} style={{ padding: "1rem 1.5rem", borderTop: "1px solid #bfdbfe" }}>
                         {!d ? (
                           <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>Loading…</p>
                         ) : (

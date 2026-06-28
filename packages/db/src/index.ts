@@ -164,3 +164,8 @@ export {
   listChatMessages,
   saveChatMessage,
 } from "./repositories/chat.js";
+export {
+  createDispatchLog,
+  listDispatchLogsByIntegration,
+  listDispatchLogsBySociety,
+} from "./repositories/dispatch-logs.js";
