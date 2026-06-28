@@ -116,3 +116,17 @@ export {
   type PaymentAllocationRow,
   type PaymentRow,
 } from "./repositories/payments.js";
+export {
+  addTicketComment,
+  assignTicket,
+  createTicket,
+  findTicketById,
+  listOverdueOpenTickets,
+  listTicketEvents,
+  listTicketsByResident,
+  listTicketsBySociety,
+  markTicketsSlaBreached,
+  updateTicketStatus,
+  type CreateTicketInput,
+  type ListTicketsFilter,
+} from "./repositories/tickets.js";

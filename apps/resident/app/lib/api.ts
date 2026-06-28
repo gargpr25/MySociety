@@ -106,6 +106,33 @@ export const api = {
     }),
 
   listPayments: () => apiFetch<Payment[]>("/resident/payments"),
+
+  // ── Tickets ────────────────────────────────────────────────────────────────
+
+  createTicket: (input: { type: string; category: string; description: string; priority?: string; unitId?: string }) =>
+    apiFetch<ResidentTicket>("/resident/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  listTickets: () => apiFetch<ResidentTicket[]>("/resident/tickets"),
+
+  getTicket: (id: string) => apiFetch<ResidentTicket & { events: TicketEvent[] }>(`/resident/tickets/${id}`),
+
+  addTicketComment: (id: string, body: string) =>
+    apiFetch<{ ok: boolean }>(`/resident/tickets/${id}/comment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+    }),
+
+  reopenTicket: (id: string) =>
+    apiFetch<ResidentTicket>(`/resident/tickets/${id}/reopen`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    }),
 };
 
 export type PaymentOrder = {
@@ -115,6 +142,36 @@ export type PaymentOrder = {
   amountPaise: number;
   currency: string;
   billId: string;
+};
+
+export type ResidentTicket = {
+  id: string;
+  societyId: string;
+  unitId: string | null;
+  raisedBy: string;
+  type: string;
+  category: string;
+  description: string;
+  status: string;
+  priority: string;
+  assignedTo: string | null;
+  slaDueAt: string | null;
+  slaBreached: boolean;
+  channel: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TicketEvent = {
+  id: string;
+  ticketId: string;
+  actorId: string | null;
+  actorKind: string;
+  eventType: string;
+  oldValue: string | null;
+  newValue: string | null;
+  body: string | null;
+  createdAt: string;
 };
 
 export type Payment = {

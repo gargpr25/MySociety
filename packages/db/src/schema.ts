@@ -239,6 +239,37 @@ export const paymentAllocations = pgTable("payment_allocations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const tickets = pgTable("tickets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  unitId: uuid("unit_id"),
+  raisedBy: uuid("raised_by").notNull(),
+  type: text("type").notNull(),
+  category: text("category").notNull(),
+  description: text("description").notNull(),
+  status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("normal"),
+  assignedTo: uuid("assigned_to"),
+  slaDueAt: timestamp("sla_due_at", { withTimezone: true }),
+  slaBreached: boolean("sla_breached").notNull().default(false),
+  channel: text("channel").notNull().default("app"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const ticketEvents = pgTable("ticket_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  ticketId: uuid("ticket_id").notNull(),
+  actorId: uuid("actor_id"),
+  actorKind: text("actor_kind").notNull(),
+  eventType: text("event_type").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  body: text("body"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const gatewayEvents = pgTable("gateway_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   provider: text("provider").notNull(),

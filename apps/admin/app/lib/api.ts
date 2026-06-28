@@ -273,6 +273,39 @@ export const api = {
   // ── Audit log ──────────────────────────────────────────────────────────────
 
   listAuditLog: () => apiFetch<AuditLogEntry[]>("/admin/audit-log"),
+
+  // ── Tickets ────────────────────────────────────────────────────────────────
+
+  listTickets: (params?: { status?: string; category?: string; type?: string }) => {
+    const qs = params ? `?${new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v))).toString()}` : "";
+    return apiFetch<Ticket[]>(`/admin/tickets${qs}`);
+  },
+
+  getTicket: (id: string) => apiFetch<Ticket & { events: TicketEvent[] }>(`/admin/tickets/${id}`),
+
+  assignTicket: (id: string, assignedTo: string, comment?: string) =>
+    apiFetch<Ticket>(`/admin/tickets/${id}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignedTo, comment }),
+    }),
+
+  updateTicketStatus: (id: string, status: string, comment?: string) =>
+    apiFetch<Ticket>(`/admin/tickets/${id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status, comment }),
+    }),
+
+  commentTicket: (id: string, body: string) =>
+    apiFetch<{ ok: boolean }>(`/admin/tickets/${id}/comment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+    }),
+
+  checkSla: () =>
+    apiFetch<{ checked: number; breached: number }>("/admin/tickets/check-sla", { method: "POST" }),
 };
 
 export type Payment = {
@@ -304,6 +337,36 @@ export type BankAccount = {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type Ticket = {
+  id: string;
+  societyId: string;
+  unitId: string | null;
+  raisedBy: string;
+  type: string;
+  category: string;
+  description: string;
+  status: string;
+  priority: string;
+  assignedTo: string | null;
+  slaDueAt: string | null;
+  slaBreached: boolean;
+  channel: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TicketEvent = {
+  id: string;
+  ticketId: string;
+  actorId: string | null;
+  actorKind: string;
+  eventType: string;
+  oldValue: string | null;
+  newValue: string | null;
+  body: string | null;
+  createdAt: string;
 };
 
 export type AuditLogEntry = {

@@ -10,6 +10,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerNoticeRoutes } from "./routes/notices.js";
 import { registerPaymentRoutes } from "./routes/payments.js";
 import { registerResidentBillingRoutes } from "./routes/resident-billing.js";
+import { registerTicketRoutes } from "./routes/tickets.js";
 
 export interface BuildAppOptions {
   tenantDb?: TenantAwareDb;
@@ -51,6 +52,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       jwtSecret: options.jwtSecret,
     });
     registerResidentBillingRoutes(app, {
+      tenantDb: options.tenantDb,
+      jwtSecret: options.jwtSecret,
+    });
+    registerTicketRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
     });

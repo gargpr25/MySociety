@@ -16,6 +16,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <a href="/billing" style={{ marginRight: "1rem" }}>Billing</a>
           <a href="/payments" style={{ marginRight: "1rem" }}>Payments</a>
           <a href="/bank" style={{ marginRight: "1rem" }}>Bank Account</a>
+          <a href="/tickets" style={{ marginRight: "1rem" }}>Tickets</a>
           <a href="/login">Login / Logout</a>
         </nav>
         {children}
