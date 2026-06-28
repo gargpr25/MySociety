@@ -3,11 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type ChatMessage } from "../lib/api";
 
+type PendingClassification = {
+  intent: string;
+  category: string;
+  type: string;
+  originalText: string;
+};
+
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [pending, setPending] = useState<PendingClassification | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   async function loadMessages() {
@@ -15,8 +23,13 @@ export default function ChatPage() {
     try {
       const data = await api.listChatMessages();
       setMessages(data);
+      // Restore pending state from last bot message if needed
+      const lastBot = [...data].reverse().find((m) => m.role === "bot");
+      const meta = lastBot?.metadata as Record<string, unknown> | undefined;
+      const pc = meta?.pendingClassification as PendingClassification | undefined;
+      setPending(pc ?? null);
     } catch {
-      // ignore on first load if session doesn't exist yet
+      // ignore on first load
     } finally {
       setLoading(false);
     }
@@ -28,18 +41,31 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function handleSend(e: React.FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
+  async function send(text: string) {
     if (!text || sending) return;
     setSending(true);
-    const optimistic: ChatMessage = { id: crypto.randomUUID(), sessionId: "", role: "user", body: text, metadata: {}, createdAt: new Date().toISOString() };
+    const optimistic: ChatMessage = {
+      id: crypto.randomUUID(),
+      sessionId: "",
+      role: "user",
+      body: text,
+      metadata: {},
+      createdAt: new Date().toISOString(),
+    };
     setMessages((prev) => [...prev, optimistic]);
     setInput("");
     try {
       const resp = await api.sendChatMessage(text);
-      const botMsg: ChatMessage = { id: resp.messageId, sessionId: "", role: "bot", body: resp.reply, metadata: {}, createdAt: new Date().toISOString() };
+      const botMsg: ChatMessage = {
+        id: resp.messageId,
+        sessionId: "",
+        role: "bot",
+        body: resp.reply,
+        metadata: {},
+        createdAt: new Date().toISOString(),
+      };
       setMessages((prev) => [...prev, botMsg]);
+      setPending((resp.pendingClassification as PendingClassification | null) ?? null);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Error sending message";
       setMessages((prev) => [
@@ -49,6 +75,16 @@ export default function ChatPage() {
     } finally {
       setSending(false);
     }
+  }
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    await send(input.trim());
+  }
+
+  function renderBody(body: string) {
+    // Minimal markdown: **bold** → <strong>
+    return body.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   }
 
   return (
@@ -61,9 +97,7 @@ export default function ChatPage() {
       <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem", paddingBottom: "0.5rem" }}>
         {loading && <p style={{ color: "#9ca3af", fontSize: 13 }}>Loading…</p>}
         {!loading && messages.length === 0 && (
-          <p style={{ color: "#9ca3af", fontSize: 13 }}>
-            No messages yet. Type your issue below.
-          </p>
+          <p style={{ color: "#9ca3af", fontSize: 13 }}>No messages yet. Type your issue below.</p>
         )}
         {messages.map((msg) => (
           <div key={msg.id} style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
@@ -74,23 +108,39 @@ export default function ChatPage() {
                 borderRadius: 12,
                 fontSize: 14,
                 lineHeight: 1.5,
-                whiteSpace: "pre-wrap",
                 background: msg.role === "user" ? "#1a73e8" : "#f3f4f6",
                 color: msg.role === "user" ? "#fff" : "#111827",
               }}
-            >
-              {msg.body}
-            </div>
+              dangerouslySetInnerHTML={{ __html: renderBody(msg.body) }}
+            />
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
 
+      {/* Quick-reply buttons when there's a pending classification */}
+      {pending && !sending && (
+        <div style={{ display: "flex", gap: "0.5rem", paddingBottom: "0.5rem" }}>
+          <button
+            onClick={() => send("YES")}
+            style={{ flex: 1, padding: "0.5rem", borderRadius: 8, background: "#16a34a", color: "#fff", border: "none", fontSize: 14, cursor: "pointer", fontWeight: 600 }}
+          >
+            Yes, raise ticket
+          </button>
+          <button
+            onClick={() => send("NO")}
+            style={{ flex: 1, padding: "0.5rem", borderRadius: 8, background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", fontSize: 14, cursor: "pointer" }}
+          >
+            No, cancel
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSend} style={{ display: "flex", gap: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid #e5e7eb" }}>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Describe your issue…"
+          placeholder={pending ? "Or type a reply…" : "Describe your issue…"}
           disabled={sending}
           style={{ flex: 1, padding: "0.5rem 0.75rem", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, outline: "none" }}
         />

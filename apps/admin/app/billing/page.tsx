@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type BillHead, type BillingCycle } from "../lib/api";
+import { api, type BillHead, type BillingCycle, type CyclePreview } from "../lib/api";
 
 const th: React.CSSProperties = { padding: "0.5rem", textAlign: "left", borderBottom: "1px solid #ddd" };
 const td: React.CSSProperties = { padding: "0.5rem", borderBottom: "1px solid #eee" };
@@ -12,6 +12,9 @@ export default function BillingPage() {
   const [cycles, setCycles] = useState<BillingCycle[]>([]);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+  const [preview, setPreview] = useState<CyclePreview | null>(null);
+  const [previewCycleId, setPreviewCycleId] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // New bill head form
   const [newHead, setNewHead] = useState({ name: "", computeRule: "fixed", rate: 0 });
@@ -65,11 +68,29 @@ export default function BillingPage() {
     }
   }
 
-  async function publishCycle(cycleId: string) {
+  async function openPublishPreview(cycleId: string) {
+    setPreviewLoading(true);
+    setPreviewCycleId(cycleId);
+    setPreview(null);
+    setError("");
     try {
-      const updated = await api.publishCycle(cycleId);
-      setCycles((prev) => prev.map((c) => (c.id === cycleId ? updated : c)));
+      const data = await api.previewCycle(cycleId);
+      setPreview(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error loading preview");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  async function confirmPublish() {
+    if (!previewCycleId) return;
+    try {
+      const updated = await api.publishCycle(previewCycleId);
+      setCycles((prev) => prev.map((c) => (c.id === previewCycleId ? updated : c)));
       setMsg("Cycle published");
+      setPreview(null);
+      setPreviewCycleId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     }
@@ -141,6 +162,56 @@ export default function BillingPage() {
         </fieldset>
       </section>
 
+      {/* Publish preview panel */}
+      {previewCycleId && (
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "1.25rem", marginBottom: "1.5rem", background: "#fafafa" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <h3 style={{ margin: 0 }}>Pre-Publish Review — {preview?.period ?? "…"}</h3>
+            <button onClick={() => { setPreview(null); setPreviewCycleId(null); }} style={{ fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer" }}>✕ Cancel</button>
+          </div>
+
+          {previewLoading ? (
+            <p style={{ color: "#6b7280" }}>Loading preview…</p>
+          ) : preview ? (
+            <>
+              {preview.totalBills === 0 ? (
+                <p style={{ color: "#dc2626" }}>No bills generated yet. Run Generate before publishing.</p>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <StatCard label="Total bills" value={String(preview.totalBills)} />
+                  <StatCard label="Total amount" value={`₹${preview.totalAmount.toLocaleString()}`} />
+                  <StatCard label="Average bill" value={`₹${preview.avgAmount.toLocaleString()}`} />
+                  <StatCard label="Highest bill" value={`₹${preview.maxBill.toLocaleString()}`} />
+                  <StatCard label="Zero-amount bills" value={String(preview.zeroBillCount)} warn={preview.zeroBillCount > 0} />
+                  {preview.changePercent !== null && (
+                    <StatCard
+                      label="vs last cycle avg"
+                      value={`${preview.changePercent > 0 ? "+" : ""}${preview.changePercent}%`}
+                      warn={Math.abs(preview.changePercent) > 20}
+                    />
+                  )}
+                </div>
+              )}
+
+              {preview.changePercent !== null && Math.abs(preview.changePercent) > 20 && (
+                <p style={{ color: "#d97706", fontSize: 13, marginBottom: "0.75rem" }}>
+                  ⚠ Average bill is {Math.abs(preview.changePercent)}% {preview.changePercent > 0 ? "higher" : "lower"} than last month. Verify bill heads before publishing.
+                </p>
+              )}
+
+              {preview.totalBills > 0 && (
+                <button
+                  onClick={confirmPublish}
+                  style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 6, padding: "0.4rem 1rem", cursor: "pointer", fontWeight: 600 }}
+                >
+                  Confirm & Publish {preview.totalBills} Bills
+                </button>
+              )}
+            </>
+          ) : null}
+        </div>
+      )}
+
       <section>
         <h2>Billing Cycles</h2>
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "1rem" }}>
@@ -162,7 +233,12 @@ export default function BillingPage() {
                   {c.status === "draft" && (
                     <>
                       <button onClick={() => generateBills(c.id)} style={{ fontSize: "0.8rem" }}>Generate</button>
-                      <button onClick={() => publishCycle(c.id)} style={{ fontSize: "0.8rem" }}>Publish</button>
+                      <button
+                        onClick={() => openPublishPreview(c.id)}
+                        style={{ fontSize: "0.8rem", background: previewCycleId === c.id ? "#f3f4f6" : undefined }}
+                      >
+                        Review & Publish
+                      </button>
                     </>
                   )}
                   <a href={`/billing/cycles/${c.id}`} style={{ fontSize: "0.8rem" }}>View</a>
@@ -188,6 +264,20 @@ export default function BillingPage() {
           <button onClick={createCycle} style={{ padding: "0.3rem 0.8rem" }}>Create Cycle</button>
         </fieldset>
       </section>
+    </div>
+  );
+}
+
+function StatCard({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+  return (
+    <div style={{
+      background: warn ? "#fff7ed" : "#fff",
+      border: `1px solid ${warn ? "#fed7aa" : "#e5e7eb"}`,
+      borderRadius: 6,
+      padding: "0.6rem 0.75rem",
+    }}>
+      <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: warn ? "#d97706" : "#111" }}>{value}</div>
     </div>
   );
 }

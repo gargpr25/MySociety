@@ -27,6 +27,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type StaffMember = {
+  id: string;
+  name: string;
+  email: string;
+  roleName: string | null;
+  societyId: string | null;
+};
+
 export type Unit = {
   id: string;
   flatNo: string;
@@ -107,6 +115,19 @@ export type BillingCycle = {
   updatedAt: string;
 };
 
+export type CyclePreview = {
+  cycleId: string;
+  period: string;
+  status: string;
+  totalBills: number;
+  totalAmount: number;
+  avgAmount: number;
+  maxBill: number;
+  zeroBillCount: number;
+  prevCycleAvg: number | null;
+  changePercent: number | null;
+};
+
 export type Bill = {
   id: string;
   societyId: string;
@@ -166,6 +187,10 @@ export const api = {
     ),
 
   me: () => apiFetch<AdminPrincipal>("/me"),
+
+  listStaff: () => apiFetch<StaffMember[]>("/admin/staff"),
+
+  listAllParkingSpots: () => apiFetch<ParkingSpot[]>("/admin/parking-spots"),
 
   listUnits: () => apiFetch<Unit[]>("/admin/units"),
 
@@ -227,6 +252,9 @@ export const api = {
   generateBills: (cycleId: string) =>
     apiFetch<{ billsGenerated: number }>(`/admin/billing/cycles/${cycleId}/generate`, { method: "POST" }),
 
+  previewCycle: (cycleId: string) =>
+    apiFetch<CyclePreview>(`/admin/billing/cycles/${cycleId}/preview`),
+
   publishCycle: (cycleId: string) =>
     apiFetch<BillingCycle>(`/admin/billing/cycles/${cycleId}/publish`, { method: "POST" }),
 
@@ -247,7 +275,7 @@ export const api = {
   listPayments: () => apiFetch<Payment[]>("/admin/payments"),
 
   reconcilePayments: () =>
-    apiFetch<{ reconciled: number; checked: number }>("/admin/payments/reconcile", { method: "POST" }),
+    apiFetch<{ reconciled: number; checked: number; recoveredPayments: Array<{ id: string; providerOrderId: string; providerPaymentId: string; amountRupees: number }> }>("/admin/payments/reconcile", { method: "POST" }),
 
   // ── Bank accounts ──────────────────────────────────────────────────────────
 
@@ -334,7 +362,7 @@ export const api = {
     }),
 
   checkSla: () =>
-    apiFetch<{ checked: number; breached: number }>("/admin/tickets/check-sla", { method: "POST" }),
+    apiFetch<{ checked: number; breached: number; breachedTickets: Ticket[] }>("/admin/tickets/check-sla", { method: "POST" }),
 
   // ── Bookable Resources ─────────────────────────────────────────────────────
 

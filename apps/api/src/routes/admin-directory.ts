@@ -8,6 +8,8 @@ import {
   findRoleByName,
   findUnitById,
   findUnitResident,
+  listAdminUsers,
+  listParkingSpots,
   listParkingSpotsByUnitId,
   listResidentsByUnitId,
   listUnitResidentsByUnitId,
@@ -206,5 +208,25 @@ export function registerAdminDirectoryRoutes(app: FastifyInstance, options: Admi
     const { residentId } = request.params as { id: string; residentId: string };
     await options.tenantDb.withTenant(societyId, (tx) => deleteUnitResident(tx, residentId));
     return reply.code(204).send();
+  });
+
+  app.get("/admin/staff", { preHandler }, async (request, reply) => {
+    const societyId = request.principal?.societyId;
+    if (!societyId) {
+      return reply.code(400).send({ error: "Admin account is not scoped to a society" });
+    }
+    const staff = await options.tenantDb.withTenant(societyId, (tx) =>
+      listAdminUsers(tx, { societyId, rolePrefix: "facility_manager" }),
+    );
+    return reply.send(staff);
+  });
+
+  app.get("/admin/parking-spots", { preHandler }, async (request, reply) => {
+    const societyId = request.principal?.societyId;
+    if (!societyId) {
+      return reply.code(400).send({ error: "Admin account is not scoped to a society" });
+    }
+    const spots = await options.tenantDb.withTenant(societyId, (tx) => listParkingSpots(tx));
+    return reply.send(spots);
   });
 }

@@ -7,6 +7,7 @@ import {
   findBillById,
   findBillHeadById,
   findBillingCycleById,
+  findPreviousBillingCycle,
   findUnitById,
   getCollectionSummary,
   listBillHeads,
@@ -147,6 +148,48 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
       const msg = err instanceof Error ? err.message : "Generation failed";
       return reply.code(400).send({ error: msg });
     }
+  });
+
+  // Preview bill stats before publishing (sanity check panel)
+  app.get("/admin/billing/cycles/:id/preview", { preHandler }, async (request, reply) => {
+    const societyId = request.principal?.societyId;
+    if (!societyId) return reply.code(400).send({ error: "Admin account is not scoped to a society" });
+
+    const { id } = request.params as { id: string };
+    const [cycle, bills, prevCycle] = await options.tenantDb.withTenant(societyId, async (db) => {
+      const c = await findBillingCycleById(db, id);
+      const b = c ? await listBillsByCycleId(db, id) : [];
+      const prev = c ? await findPreviousBillingCycle(db, c.period) : null;
+      let prevBills: typeof b = [];
+      if (prev) prevBills = await listBillsByCycleId(db, prev.id);
+      return [c, b, prevBills] as const;
+    });
+
+    if (!cycle) return reply.code(404).send({ error: "Billing cycle not found" });
+
+    const totalBills = bills.length;
+    const amounts = bills.map((b) => Number(b.totalDue));
+    const totalAmount = amounts.reduce((s, a) => s + a, 0);
+    const avgAmount = totalBills > 0 ? totalAmount / totalBills : 0;
+    const maxBill = totalBills > 0 ? Math.max(...amounts) : 0;
+    const zeroBillCount = amounts.filter((a) => a === 0).length;
+
+    const prevAmounts = prevCycle.map((b) => Number(b.totalDue));
+    const prevAvg = prevAmounts.length > 0 ? prevAmounts.reduce((s, a) => s + a, 0) / prevAmounts.length : null;
+    const changePercent = prevAvg && prevAvg > 0 ? Math.round(((avgAmount - prevAvg) / prevAvg) * 100) : null;
+
+    return reply.send({
+      cycleId: id,
+      period: cycle.period,
+      status: cycle.status,
+      totalBills,
+      totalAmount: Math.round(totalAmount * 100) / 100,
+      avgAmount: Math.round(avgAmount * 100) / 100,
+      maxBill: Math.round(maxBill * 100) / 100,
+      zeroBillCount,
+      prevCycleAvg: prevAvg !== null ? Math.round(prevAvg * 100) / 100 : null,
+      changePercent,
+    });
   });
 
   // Publish a cycle (draft → published)

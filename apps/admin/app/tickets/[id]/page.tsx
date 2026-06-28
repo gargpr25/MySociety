@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, type Ticket, type TicketEvent } from "../../lib/api";
+import { api, type StaffMember, type Ticket, type TicketEvent } from "../../lib/api";
+import { Combobox, type ComboboxOption } from "../../components/Combobox";
 
 const STATUS_COLORS: Record<string, string> = {
   open: "#2563eb",
@@ -18,6 +19,7 @@ export default function TicketDetailPage() {
   const [ticket, setTicket] = useState<(Ticket & { events: TicketEvent[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [assignTo, setAssignTo] = useState("");
   const [newStatus, setNewStatus] = useState("");
   const [comment, setComment] = useState("");
@@ -26,8 +28,9 @@ export default function TicketDetailPage() {
   async function load() {
     setLoading(true);
     try {
-      const data = await api.getTicket(id);
+      const [data, staffList] = await Promise.all([api.getTicket(id), api.listStaff()]);
       setTicket(data);
+      setStaff(staffList);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error loading ticket");
     } finally {
@@ -105,7 +108,7 @@ export default function TicketDetailPage() {
         <dt>Category</dt><dd>{ticket.category}</dd>
         <dt>Priority</dt><dd>{ticket.priority}</dd>
         <dt>Raised by</dt><dd>{ticket.raisedBy}</dd>
-        <dt>Assigned to</dt><dd>{ticket.assignedTo ?? "—"}</dd>
+        <dt>Assigned to</dt><dd>{ticket.assignedTo ? (staff.find((s) => s.id === ticket.assignedTo)?.name ?? ticket.assignedTo.slice(0, 8) + "…") : "—"}</dd>
         <dt>SLA due</dt><dd>{ticket.slaDueAt ? new Date(ticket.slaDueAt).toLocaleString() : "—"}</dd>
         <dt>Created</dt><dd>{new Date(ticket.createdAt).toLocaleString()}</dd>
         <dt>Description</dt><dd>{ticket.description}</dd>
@@ -115,10 +118,15 @@ export default function TicketDetailPage() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2rem", maxWidth: 480 }}>
         <div>
-          <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>Assign to (admin user ID)</label>
+          <label style={{ display: "block", fontWeight: 600, marginBottom: 4 }}>Assign to</label>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <input value={assignTo} onChange={(e) => setAssignTo(e.target.value)} style={{ flex: 1, padding: "0.3rem" }} placeholder="UUID of facility_manager" />
-            <button onClick={handleAssign}>Assign</button>
+            <Combobox
+              options={staff.map((s): ComboboxOption => ({ id: s.id, label: s.name, sublabel: s.email }))}
+              value={assignTo}
+              onChange={setAssignTo}
+              placeholder="Search staff…"
+            />
+            <button onClick={handleAssign} disabled={!assignTo}>Assign</button>
           </div>
         </div>
 

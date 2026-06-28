@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type ParkingAllocation } from "../lib/api";
+import { api, type ParkingAllocation, type ParkingSpot, type Unit } from "../lib/api";
+import { Combobox, type ComboboxOption } from "../components/Combobox";
 
 export default function ParkingPage() {
   const [allocations, setAllocations] = useState<ParkingAllocation[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [spots, setSpots] = useState<ParkingSpot[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [spotId, setSpotId] = useState("");
@@ -17,8 +20,14 @@ export default function ParkingPage() {
   async function load() {
     setLoading(true);
     try {
-      const data = await api.listParkingAllocations();
+      const [data, unitList, spotList] = await Promise.all([
+        api.listParkingAllocations(),
+        api.listUnits(),
+        api.listAllParkingSpots(),
+      ]);
       setAllocations(data);
+      setUnits(unitList);
+      setSpots(spotList);
     } catch (e) {
       console.error(e);
     } finally {
@@ -68,10 +77,28 @@ export default function ParkingPage() {
 
       {showForm && (
         <form onSubmit={handleCreate} style={{ background: "#f9f9f9", padding: "1rem", borderRadius: 8, marginBottom: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: 440 }}>
-          <label style={{ fontWeight: 600 }}>Spot ID (UUID)</label>
-          <input value={spotId} onChange={(e) => setSpotId(e.target.value)} required placeholder="parking spot UUID" style={{ padding: "0.4rem", fontFamily: "monospace" }} />
-          <label style={{ fontWeight: 600 }}>Unit ID (UUID)</label>
-          <input value={unitId} onChange={(e) => setUnitId(e.target.value)} required placeholder="unit UUID" style={{ padding: "0.4rem", fontFamily: "monospace" }} />
+          <label style={{ fontWeight: 600 }}>Parking Spot</label>
+          <Combobox
+            options={spots.map((s): ComboboxOption => ({
+              id: s.id,
+              label: s.spotNo,
+              sublabel: `${s.type}${s.isRentable ? " · rentable" : ""}`,
+            }))}
+            value={spotId}
+            onChange={setSpotId}
+            placeholder="Search spot number…"
+          />
+          <label style={{ fontWeight: 600 }}>Unit</label>
+          <Combobox
+            options={units.map((u): ComboboxOption => ({
+              id: u.id,
+              label: u.flatNo,
+              sublabel: u.type,
+            }))}
+            value={unitId}
+            onChange={setUnitId}
+            placeholder="Search flat number…"
+          />
           <label style={{ fontWeight: 600 }}>Period (e.g. 2024-01)</label>
           <input value={period} onChange={(e) => setPeriod(e.target.value)} required placeholder="2024-01" style={{ padding: "0.4rem" }} />
           <label style={{ fontWeight: 600 }}>Monthly Rent (₹, 0 for owned spots)</label>
@@ -102,8 +129,8 @@ export default function ParkingPage() {
           <tbody>
             {allocations.map((a) => (
               <tr key={a.id} style={{ borderTop: "1px solid #eee" }}>
-                <td style={{ padding: "0.5rem", fontFamily: "monospace", fontSize: 12 }}>{a.spotId.slice(0, 8)}…</td>
-                <td style={{ padding: "0.5rem", fontFamily: "monospace", fontSize: 12 }}>{a.unitId.slice(0, 8)}…</td>
+                <td style={{ padding: "0.5rem" }}>{spots.find((s) => s.id === a.spotId)?.spotNo ?? a.spotId.slice(0, 8) + "…"}</td>
+                <td style={{ padding: "0.5rem" }}>{units.find((u) => u.id === a.unitId)?.flatNo ?? a.unitId.slice(0, 8) + "…"}</td>
                 <td style={{ padding: "0.5rem" }}>{a.period}</td>
                 <td style={{ padding: "0.5rem" }}>{a.rentAmount > 0 ? `₹${a.rentAmount}` : "Owned"}</td>
                 <td style={{ padding: "0.5rem" }}>

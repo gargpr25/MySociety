@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
-import { adminUsers } from "../schema.js";
+import { adminUsers, roles } from "../schema.js";
 
 export async function createAdminUser(
   db: Database,
@@ -26,6 +26,27 @@ export async function findAdminByEmail(db: Database, email: string) {
 export async function findAdminById(db: Database, id: string) {
   const [row] = await db.select().from(adminUsers).where(eq(adminUsers.id, id));
   return row;
+}
+
+export async function listAdminUsers(
+  db: Database,
+  opts?: { societyId?: string; rolePrefix?: string },
+) {
+  const conditions = [];
+  if (opts?.societyId) conditions.push(eq(adminUsers.societyId, opts.societyId));
+  if (opts?.rolePrefix) conditions.push(sql`${roles.name} LIKE ${opts.rolePrefix + "%"}`);
+
+  return db
+    .select({
+      id: adminUsers.id,
+      name: adminUsers.name,
+      email: adminUsers.email,
+      roleName: roles.name,
+      societyId: adminUsers.societyId,
+    })
+    .from(adminUsers)
+    .leftJoin(roles, eq(adminUsers.roleId, roles.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
 }
 
 /**

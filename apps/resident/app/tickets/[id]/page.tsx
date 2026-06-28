@@ -82,7 +82,7 @@ export default function TicketStatusPage() {
           <dt>Priority</dt><dd>{ticket.priority}</dd>
           <dt>Raised on</dt><dd>{new Date(ticket.createdAt).toLocaleString()}</dd>
           {ticket.slaDueAt && <><dt>Expected by</dt><dd>{new Date(ticket.slaDueAt).toLocaleString()}</dd></>}
-          {ticket.assignedTo && <><dt>Assigned to</dt><dd>Staff (ID: {ticket.assignedTo.slice(0, 8)}…)</dd></>}
+          {ticket.assignedTo && <><dt>Assigned to</dt><dd>Society staff</dd></>}
         </dl>
       </div>
 

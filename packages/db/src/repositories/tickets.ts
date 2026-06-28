@@ -200,7 +200,7 @@ export async function listTicketEvents(db: Database, ticketId: string) {
 
 export async function listOverdueOpenTickets(db: Database, now: Date) {
   return db
-    .select({ id: tickets.id, societyId: tickets.societyId })
+    .select()
     .from(tickets)
     .where(
       and(

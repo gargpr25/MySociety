@@ -24,6 +24,16 @@ const sendMessageSchema = z.object({
   message: z.string().min(1).max(2000),
 });
 
+const CONFIRM_RE = /^(yes|y|ok|confirm|sure|yeah|yep|proceed|raise|create ticket|go ahead)\b/i;
+const CANCEL_RE = /^(no|nope|cancel|stop|don'?t|actually|never mind|nevermind)\b/i;
+
+type PendingClassification = {
+  intent: "complaint" | "request";
+  category: string;
+  type: string;
+  originalText: string;
+};
+
 export function registerChatRoutes(app: FastifyInstance, options: ChatRouteOptions) {
   const { tenantDb } = options;
   const classifier = createClassifier(options.classifierType);
@@ -48,44 +58,72 @@ export function registerChatRoutes(app: FastifyInstance, options: ChatRouteOptio
       return s;
     });
 
+    // Get conversation history before saving user message, to find pending classification
+    const history = await tenantDb.withTenant(societyId, (db) => listChatMessages(db, session.id));
+    const lastBotMsg = [...history].reverse().find((m) => m.role === "bot");
+    const pending = (lastBotMsg?.metadata as Record<string, unknown> | null)?.pendingClassification as PendingClassification | undefined;
+
     await tenantDb.withTenant(societyId, (db) =>
       saveChatMessage(db, { societyId, sessionId: session.id, role: "user", body: userText }),
     );
 
-    const result = classifier.classify(userText);
     let botReply: string;
     let ticketId: string | undefined;
+    let botMetadata: Record<string, unknown> = {};
 
-    if (result.intent === "complaint" || result.intent === "request") {
+    if (pending && CONFIRM_RE.test(userText.trim())) {
+      // Phase 2 — confirmed: create the ticket
       const ticket = await tenantDb.withTenant(societyId, (db) =>
         createTicket(db, {
           societyId,
           raisedBy: principal.id,
-          type: result.type ?? result.intent,
-          category: result.category ?? "other",
-          description: userText,
+          type: pending.type,
+          category: pending.category,
+          description: pending.originalText,
           channel: "chatbot",
         }),
       );
       ticketId = ticket.id;
-      const label = result.intent === "complaint" ? "complaint" : "request";
+      const label = pending.intent === "complaint" ? "complaint" : "request";
       botReply =
         `Your ${label} has been logged (ticket #${ticket.id.slice(0, 8)}). ` +
         `A facility manager will attend to it shortly. You can track it under Tickets.`;
-    } else if (result.intent === "status_query") {
-      const tickets = await tenantDb.withTenant(societyId, (db) =>
-        listTicketsByResident(db, principal.id),
-      );
-      if (tickets.length === 0) {
-        botReply = "You have no open tickets. If you have a new issue, please describe it and I will raise it.";
-      } else {
-        const latest = tickets[0]!;
-        botReply =
-          `Your latest ticket (${latest.category}, #${latest.id.slice(0, 8)}) is currently: ${latest.status}. ` +
-          `You have ${tickets.length} ticket(s) in total. View details under Tickets.`;
-      }
+    } else if (pending && CANCEL_RE.test(userText.trim())) {
+      // Phase 2 — cancelled
+      botReply = "No problem — I've discarded that. If you have a different issue, please describe it.";
     } else {
-      botReply = MENU_MESSAGE;
+      // Phase 1 — classify fresh input (or re-classify if pending was ignored)
+      const result = classifier.classify(userText);
+
+      if (result.intent === "complaint" || result.intent === "request") {
+        const label = result.intent === "complaint" ? "complaint" : "request";
+        const categoryLabel = result.category ?? "general";
+        botReply =
+          `I've identified this as a **${label}** about **${categoryLabel}**.\n\n` +
+          `Shall I raise a ticket? Reply **YES** to confirm or **NO** to cancel.`;
+        botMetadata = {
+          pendingClassification: {
+            intent: result.intent,
+            category: result.category ?? "other",
+            type: result.type ?? result.intent,
+            originalText: userText,
+          } satisfies PendingClassification,
+        };
+      } else if (result.intent === "status_query") {
+        const tickets = await tenantDb.withTenant(societyId, (db) =>
+          listTicketsByResident(db, principal.id),
+        );
+        if (tickets.length === 0) {
+          botReply = "You have no open tickets. If you have a new issue, please describe it and I will raise it.";
+        } else {
+          const latest = tickets[0]!;
+          botReply =
+            `Your latest ticket (${latest.category}, #${latest.id.slice(0, 8)}) is currently: ${latest.status}. ` +
+            `You have ${tickets.length} ticket(s) in total. View details under Tickets.`;
+        }
+      } else {
+        botReply = MENU_MESSAGE;
+      }
     }
 
     const botMsg = await tenantDb.withTenant(societyId, (db) =>
@@ -94,11 +132,11 @@ export function registerChatRoutes(app: FastifyInstance, options: ChatRouteOptio
         sessionId: session.id,
         role: "bot",
         body: botReply,
-        metadata: ticketId ? { ticketId } : {},
+        metadata: ticketId ? { ticketId } : botMetadata,
       }),
     );
 
-    return reply.send({ reply: botReply, ticketId, messageId: botMsg.id });
+    return reply.send({ reply: botReply, ticketId, messageId: botMsg.id, pendingClassification: botMetadata.pendingClassification ?? null });
   });
 
   // ── GET /resident/chat/messages ─────────────────────────────────────────────

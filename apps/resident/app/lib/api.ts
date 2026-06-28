@@ -153,7 +153,7 @@ export const api = {
   // ── Chat ───────────────────────────────────────────────────────────────────
 
   sendChatMessage: (message: string) =>
-    apiFetch<{ reply: string; ticketId?: string; messageId: string }>("/resident/chat/message", {
+    apiFetch<{ reply: string; ticketId?: string; messageId: string; pendingClassification?: unknown }>("/resident/chat/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message }),

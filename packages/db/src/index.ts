@@ -27,6 +27,7 @@ export {
   findAdminByEmail,
   findAdminById,
   findAdminByEmailAcrossTenants,
+  listAdminUsers,
 } from "./repositories/admin-users.js";
 export {
   countRecentOtpRequests,

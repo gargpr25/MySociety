@@ -264,7 +264,7 @@ export function registerTicketRoutes(app: FastifyInstance, options: TicketRouteO
     const ids = overdue.map((r) => r.id);
     const count = await tenantDb.withTenant(societyId, (db) => markTicketsSlaBreached(db, ids));
 
-    return reply.send({ checked: overdue.length, breached: count });
+    return reply.send({ checked: overdue.length, breached: count, breachedTickets: overdue.map(serializeTicket) });
   });
 }
 

@@ -181,6 +181,7 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
     );
 
     let recovered = 0;
+    const recoveredPayments: Array<{ id: string; providerOrderId: string; providerPaymentId: string; amountRupees: number }> = [];
     for (const payment of pending) {
       const orderStatus = await paymentProvider.getOrderStatus(payment.providerOrderId);
       if (orderStatus.status === "captured" && orderStatus.paymentId) {
@@ -213,12 +214,18 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
           });
         });
         recovered++;
+        recoveredPayments.push({
+          id: payment.id,
+          providerOrderId: payment.providerOrderId,
+          providerPaymentId: orderStatus.paymentId!,
+          amountRupees: payment.amountPaise / 100,
+        });
       } else if (orderStatus.status === "failed") {
         await tenantDb.withTenant(payment.societyId, (db) => updatePaymentFailed(db, payment.id));
       }
     }
 
-    return reply.send({ reconciled: recovered, checked: pending.length });
+    return reply.send({ reconciled: recovered, checked: pending.length, recoveredPayments });
   });
 
   // ── Resident: list my payments ────────────────────────────────────────────────
