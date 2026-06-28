@@ -117,6 +117,25 @@ export {
   type PaymentRow,
 } from "./repositories/payments.js";
 export {
+  cancelBooking,
+  createBooking,
+  createParkingAllocation,
+  createResource,
+  endParkingAllocation,
+  findActiveAllocationBySpot,
+  findBookingById,
+  findResourceById,
+  listAllResources,
+  listBookingsByResident,
+  listBookingsBySociety,
+  listParkingAllocations,
+  listResources,
+  updateResource,
+  type CreateBookingInput,
+  type CreateParkingAllocationInput,
+  type CreateResourceInput,
+} from "./repositories/bookings.js";
+export {
   addTicketComment,
   assignTicket,
   createTicket,

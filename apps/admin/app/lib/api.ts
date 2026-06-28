@@ -306,6 +306,46 @@ export const api = {
 
   checkSla: () =>
     apiFetch<{ checked: number; breached: number }>("/admin/tickets/check-sla", { method: "POST" }),
+
+  // ── Bookable Resources ─────────────────────────────────────────────────────
+
+  listResources: () => apiFetch<BookableResource[]>("/admin/resources"),
+
+  createResource: (input: { name: string; description?: string; capacity?: number }) =>
+    apiFetch<BookableResource>("/admin/resources", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  updateResource: (id: string, input: Partial<{ name: string; capacity: number; isActive: boolean }>) =>
+    apiFetch<BookableResource>(`/admin/resources/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  listBookings: (params?: { resourceId?: string; status?: string }) => {
+    const qs = params ? `?${new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v))).toString()}` : "";
+    return apiFetch<Booking[]>(`/admin/bookings${qs}`);
+  },
+
+  cancelBooking: (id: string) =>
+    apiFetch<Booking>(`/admin/bookings/${id}/cancel`, { method: "POST" }),
+
+  // ── Parking Allocations ────────────────────────────────────────────────────
+
+  listParkingAllocations: () => apiFetch<ParkingAllocation[]>("/admin/parking-allocations"),
+
+  createParkingAllocation: (input: { spotId: string; unitId: string; period: string; rentAmount: number; startsAt: string; cycleId?: string; dueDate?: string }) =>
+    apiFetch<ParkingAllocation & { billId: string | null }>("/admin/parking-allocations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  endParkingAllocation: (id: string) =>
+    apiFetch<ParkingAllocation>(`/admin/parking-allocations/${id}/end`, { method: "POST" }),
 };
 
 export type Payment = {
@@ -366,6 +406,44 @@ export type TicketEvent = {
   oldValue: string | null;
   newValue: string | null;
   body: string | null;
+  createdAt: string;
+};
+
+export type BookableResource = {
+  id: string;
+  societyId: string;
+  name: string;
+  description: string;
+  capacity: number;
+  slotRules: object;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Booking = {
+  id: string;
+  societyId: string;
+  resourceId: string;
+  unitId: string;
+  bookedBy: string;
+  slotStart: string;
+  slotEnd: string;
+  status: string;
+  createdAt: string;
+};
+
+export type ParkingAllocation = {
+  id: string;
+  societyId: string;
+  spotId: string;
+  unitId: string;
+  period: string;
+  rentAmount: number;
+  billId: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  status: string;
   createdAt: string;
 };
 

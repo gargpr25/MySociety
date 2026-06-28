@@ -239,6 +239,45 @@ export const paymentAllocations = pgTable("payment_allocations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const bookableResources = pgTable("bookable_resources", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  capacity: integer("capacity").notNull().default(1),
+  slotRules: jsonb("slot_rules").notNull().default({}),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const bookings = pgTable("bookings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  resourceId: uuid("resource_id").notNull(),
+  unitId: uuid("unit_id").notNull(),
+  bookedBy: uuid("booked_by").notNull(),
+  slotStart: timestamp("slot_start", { withTimezone: true }).notNull(),
+  slotEnd: timestamp("slot_end", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("confirmed"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const parkingAllocations = pgTable("parking_allocations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  spotId: uuid("spot_id").notNull(),
+  unitId: uuid("unit_id").notNull(),
+  period: text("period").notNull(),
+  rentAmount: numeric("rent_amount", { mode: "number" }).notNull().default(0),
+  billId: uuid("bill_id"),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const tickets = pgTable("tickets", {
   id: uuid("id").primaryKey().defaultRandom(),
   societyId: uuid("society_id").notNull(),

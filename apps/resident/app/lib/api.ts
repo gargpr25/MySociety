@@ -133,6 +133,22 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: "{}",
     }),
+
+  // ── Bookings ───────────────────────────────────────────────────────────────
+
+  listResources: () => apiFetch<BookableResource[]>("/resident/resources"),
+
+  createBooking: (input: { resourceId: string; unitId: string; slotStart: string; slotEnd: string }) =>
+    apiFetch<ResidentBooking>("/resident/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  listBookings: () => apiFetch<ResidentBooking[]>("/resident/bookings"),
+
+  cancelBooking: (id: string) =>
+    apiFetch<ResidentBooking>(`/resident/bookings/${id}/cancel`, { method: "POST" }),
 };
 
 export type PaymentOrder = {
@@ -181,6 +197,28 @@ export type Payment = {
   amountPaise: number;
   amountRupees: number;
   currency: string;
+  status: string;
+  createdAt: string;
+};
+
+export type BookableResource = {
+  id: string;
+  societyId: string;
+  name: string;
+  description: string;
+  capacity: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
+export type ResidentBooking = {
+  id: string;
+  societyId: string;
+  resourceId: string;
+  unitId: string;
+  bookedBy: string;
+  slotStart: string;
+  slotEnd: string;
   status: string;
   createdAt: string;
 };
