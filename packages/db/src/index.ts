@@ -149,3 +149,11 @@ export {
   type CreateTicketInput,
   type ListTicketsFilter,
 } from "./repositories/tickets.js";
+export {
+  createIntegrationConfig,
+  findActiveConfigsForEvent,
+  findIntegrationConfigById,
+  listIntegrationConfigs,
+  updateIntegrationConfig,
+  type CreateIntegrationConfigInput,
+} from "./repositories/integrations.js";

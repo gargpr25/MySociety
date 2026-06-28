@@ -26,13 +26,14 @@ export interface PaymentRouteOptions {
   superAdminDb: Database;
   jwtSecret: string;
   paymentProvider: PaymentProvider;
+  dispatcher?: import("../connectors/dispatcher.js").DispatcherFn;
 }
 
 const ADMIN_ROLES = ["society_admin", "platform_super_admin", "society_accountant"] as const;
 const RESIDENT_ROLES = ["resident_owner", "resident_tenant", "resident_family"] as const;
 
 export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRouteOptions) {
-  const { tenantDb, superAdminDb, paymentProvider } = options;
+  const { tenantDb, superAdminDb, paymentProvider, dispatcher } = options;
   const residentPreHandler = [authenticate(options.jwtSecret), requireRole(...RESIDENT_ROLES)];
   const adminPreHandler = [authenticate(options.jwtSecret), requireRole(...ADMIN_ROLES)];
 
@@ -138,6 +139,13 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
             afterState: { providerPaymentId: parsed.paymentId, amountPaise: parsed.amountPaise },
           });
         });
+        dispatcher?.({
+          type: "payment.captured",
+          societyId: payment.societyId,
+          paymentId: payment.id,
+          residentId: payment.residentId,
+          amountRupees: payment.amountPaise / 100,
+        }).catch(() => undefined);
       }
     } else if (parsed.event === "payment.failed") {
       const payment = await findPaymentByProviderOrderId(superAdminDb, parsed.orderId);

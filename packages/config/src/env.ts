@@ -14,6 +14,9 @@ const envSchema = z.object({
   SMS_PROVIDER: z.enum(["console"]).default("console"),
   PAYMENT_PROVIDER: z.enum(["fake", "razorpay"]).default("fake"),
   JWT_SECRET: z.string().min(16),
+  // 32-byte AES-256 key encoded as 64 hex chars. Required in production for
+  // encrypting integration connector credentials at rest.
+  INTEGRATION_ENCRYPTION_KEY: z.string().length(64).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

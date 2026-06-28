@@ -318,3 +318,15 @@ export const gatewayEvents = pgTable("gateway_events", {
   processedAt: timestamp("processed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const integrationConfigs = pgTable("integration_configs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  connectorType: text("connector_type").notNull(),
+  encryptedCredentials: text("encrypted_credentials").notNull().default(""),
+  fieldMappings: jsonb("field_mappings").notNull().default({}),
+  enabledEvents: jsonb("enabled_events").notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

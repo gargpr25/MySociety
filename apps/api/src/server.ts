@@ -6,7 +6,12 @@ async function main() {
   const env = loadEnv();
   const tenantDb = createTenantAwareDb(env.DATABASE_URL);
   const smsProvider = createSmsProvider(env.SMS_PROVIDER);
-  const app = buildApp({ tenantDb, jwtSecret: env.JWT_SECRET, smsProvider });
+  const app = buildApp({
+    tenantDb,
+    jwtSecret: env.JWT_SECRET,
+    smsProvider,
+    integrationEncryptionKey: env.INTEGRATION_ENCRYPTION_KEY,
+  });
   await app.listen({ host: "0.0.0.0", port: env.PORT });
 }
 

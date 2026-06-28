@@ -6,3 +6,5 @@ export * from "./billing.js";
 export * from "./payments.js";
 export * from "./tickets.js";
 export * from "./bookings.js";
+export * from "./events.js";
+export * from "./integrations.js";

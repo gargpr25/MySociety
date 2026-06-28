@@ -12,6 +12,8 @@ import { registerPaymentRoutes } from "./routes/payments.js";
 import { registerResidentBillingRoutes } from "./routes/resident-billing.js";
 import { registerBookingRoutes } from "./routes/bookings.js";
 import { registerTicketRoutes } from "./routes/tickets.js";
+import { registerIntegrationRoutes } from "./routes/integrations.js";
+import { createDispatcher, type DispatcherFn } from "./connectors/dispatcher.js";
 
 export interface BuildAppOptions {
   tenantDb?: TenantAwareDb;
@@ -19,6 +21,7 @@ export interface BuildAppOptions {
   jwtSecret?: string;
   smsProvider?: SmsProvider;
   paymentProvider?: PaymentProvider;
+  integrationEncryptionKey?: string;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -40,6 +43,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
 
   if (options.tenantDb && options.jwtSecret) {
+    const dispatcher: DispatcherFn | undefined =
+      options.integrationEncryptionKey
+        ? createDispatcher(options.tenantDb, options.integrationEncryptionKey)
+        : undefined;
+
     registerAdminDirectoryRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
@@ -51,6 +59,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerAdminBillingRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
+      dispatcher,
     });
     registerResidentBillingRoutes(app, {
       tenantDb: options.tenantDb,
@@ -59,11 +68,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     registerTicketRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
+      dispatcher,
     });
     registerBookingRoutes(app, {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
     });
+
+    if (options.integrationEncryptionKey) {
+      registerIntegrationRoutes(app, {
+        tenantDb: options.tenantDb,
+        jwtSecret: options.jwtSecret,
+        encryptionKey: options.integrationEncryptionKey,
+      });
+    }
 
     if (options.paymentProvider && options.superAdminDb) {
       registerPaymentRoutes(app, {
@@ -71,6 +89,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         superAdminDb: options.superAdminDb,
         jwtSecret: options.jwtSecret,
         paymentProvider: options.paymentProvider,
+        dispatcher,
       });
       registerAdminBankRoutes(app, {
         tenantDb: options.tenantDb,

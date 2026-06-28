@@ -28,16 +28,19 @@ import { z } from "zod";
 import type { TenantAwareDb } from "../db.js";
 import { authenticate, requireRole } from "../auth/middleware.js";
 import { generateBillsForCycle } from "../billing/billing-engine.js";
+import type { DispatcherFn } from "../connectors/dispatcher.js";
 
 export interface AdminBillingRouteOptions {
   tenantDb: TenantAwareDb;
   jwtSecret: string;
+  dispatcher?: DispatcherFn;
 }
 
 const ADMIN_ROLES = ["society_admin", "platform_super_admin", "society_accountant"] as const;
 
 export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminBillingRouteOptions) {
   const preHandler = [authenticate(options.jwtSecret), requireRole(...ADMIN_ROLES)];
+  const { dispatcher } = options;
 
   // ── Bill Heads ────────────────────────────────────────────────────────────────
 
@@ -124,6 +127,21 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
       const result = await options.tenantDb.withTenant(societyId, (db) =>
         generateBillsForCycle(db, societyId, id),
       );
+      if (dispatcher && result.billsGenerated > 0) {
+        const cycle = await options.tenantDb.withTenant(societyId, (db) => findBillingCycleById(db, id));
+        const bills = await options.tenantDb.withTenant(societyId, (db) => listBillsByCycleId(db, id));
+        for (const bill of bills) {
+          dispatcher({
+            type: "bill.generated",
+            societyId,
+            billId: bill.id,
+            unitId: bill.unitId,
+            cycleId: id,
+            period: cycle?.period ?? "",
+            totalDue: bill.totalDue,
+          }).catch(() => undefined);
+        }
+      }
       return reply.send(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Generation failed";

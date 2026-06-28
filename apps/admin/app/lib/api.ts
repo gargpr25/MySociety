@@ -274,6 +274,35 @@ export const api = {
 
   listAuditLog: () => apiFetch<AuditLogEntry[]>("/admin/audit-log"),
 
+  // ── Integrations ───────────────────────────────────────────────────────────
+
+  listIntegrations: () => apiFetch<IntegrationConfig[]>("/admin/integrations"),
+
+  createIntegration: (input: {
+    connectorType: "generic_webhook" | "csv_export";
+    credentials: Record<string, string>;
+    fieldMappings?: Record<string, string>;
+    enabledEvents: string[];
+    isActive?: boolean;
+  }) =>
+    apiFetch<IntegrationConfig>("/admin/integrations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  updateIntegration: (id: string, input: {
+    credentials?: Record<string, string>;
+    fieldMappings?: Record<string, string>;
+    enabledEvents?: string[];
+    isActive?: boolean;
+  }) =>
+    apiFetch<IntegrationConfig>(`/admin/integrations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
   // ── Tickets ────────────────────────────────────────────────────────────────
 
   listTickets: (params?: { status?: string; category?: string; type?: string }) => {
@@ -457,4 +486,16 @@ export type AuditLogEntry = {
   beforeState: unknown;
   afterState: unknown;
   createdAt: string;
+};
+
+export type IntegrationConfig = {
+  id: string;
+  societyId: string;
+  connectorType: string;
+  hasCredentials: boolean;
+  fieldMappings: unknown;
+  enabledEvents: unknown;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 };

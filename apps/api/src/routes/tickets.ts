@@ -20,17 +20,19 @@ import {
 } from "@mysociety/types";
 import type { TenantAwareDb } from "../db.js";
 import { authenticate, requireRole } from "../auth/middleware.js";
+import type { DispatcherFn } from "../connectors/dispatcher.js";
 
 export interface TicketRouteOptions {
   tenantDb: TenantAwareDb;
   jwtSecret: string;
+  dispatcher?: DispatcherFn;
 }
 
 const ADMIN_ROLES = ["society_admin", "platform_super_admin", "society_accountant", "facility_manager"] as const;
 const RESIDENT_ROLES = ["resident_owner", "resident_tenant", "resident_family"] as const;
 
 export function registerTicketRoutes(app: FastifyInstance, options: TicketRouteOptions) {
-  const { tenantDb } = options;
+  const { tenantDb, dispatcher } = options;
   const residentPreHandler = [authenticate(options.jwtSecret), requireRole(...RESIDENT_ROLES)];
   const adminPreHandler = [authenticate(options.jwtSecret), requireRole(...ADMIN_ROLES)];
 
@@ -57,6 +59,15 @@ export function registerTicketRoutes(app: FastifyInstance, options: TicketRouteO
         channel: "app",
       }),
     );
+
+    dispatcher?.({
+      type: "ticket.created",
+      societyId,
+      ticketId: ticket.id,
+      category: ticket.category,
+      ticketType: ticket.type,
+      unitId: ticket.unitId ?? null,
+    }).catch(() => undefined);
 
     return reply.code(201).send(serializeTicket(ticket));
   });
@@ -207,7 +218,18 @@ export function registerTicketRoutes(app: FastifyInstance, options: TicketRouteO
     if (result.error) {
       return reply.code(400).send({ error: result.error });
     }
-    return reply.send(serializeTicket(result.ticket!));
+    const updatedTicket = result.ticket!;
+    if (parsed.data.status === "resolved") {
+      dispatcher?.({
+        type: "ticket.resolved",
+        societyId,
+        ticketId: updatedTicket.id,
+        category: updatedTicket.category,
+        ticketType: updatedTicket.type,
+        unitId: updatedTicket.unitId ?? null,
+      }).catch(() => undefined);
+    }
+    return reply.send(serializeTicket(updatedTicket));
   });
 
   // ── Admin: comment on ticket ────────────────────────────────────────────────
