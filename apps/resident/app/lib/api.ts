@@ -97,4 +97,33 @@ export const api = {
   getBill: (id: string) => apiFetch<Bill & { lineItems: BillLineItem[] }>(`/resident/bills/${id}`),
 
   invoicePdfUrl: (id: string) => `/api/resident/bills/${id}/invoice.pdf`,
+
+  createPaymentOrder: (billId: string) =>
+    apiFetch<PaymentOrder>("/payments/order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ billId }),
+    }),
+
+  listPayments: () => apiFetch<Payment[]>("/resident/payments"),
+};
+
+export type PaymentOrder = {
+  id: string;
+  orderId: string;
+  providerOrderId: string;
+  amountPaise: number;
+  currency: string;
+  billId: string;
+};
+
+export type Payment = {
+  id: string;
+  providerOrderId: string;
+  providerPaymentId: string | null;
+  amountPaise: number;
+  amountRupees: number;
+  currency: string;
+  status: string;
+  createdAt: string;
 };

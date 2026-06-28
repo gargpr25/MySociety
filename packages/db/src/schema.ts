@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const societies = pgTable("societies", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -6,6 +6,7 @@ export const societies = pgTable("societies", {
   address: jsonb("address").notNull().default({}),
   config: jsonb("config").notNull().default({}),
   onboardingStatus: text("onboarding_status").notNull().default("pending"),
+  razorpayLinkedAccountId: text("razorpay_linked_account_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -179,5 +180,71 @@ export const otpRequests = pgTable("otp_requests", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   attempts: integer("attempts").notNull().default(0),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const auditLog = pgTable("audit_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id"),
+  actorId: uuid("actor_id"),
+  actorKind: text("actor_kind").notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: uuid("entity_id"),
+  beforeState: jsonb("before_state"),
+  afterState: jsonb("after_state"),
+  ipAddress: text("ip_address"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const societyBankAccounts = pgTable("society_bank_accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  accountName: text("account_name").notNull(),
+  accountNumberLast4: text("account_number_last4").notNull(),
+  accountNumberEncrypted: text("account_number_encrypted").notNull(),
+  ifsc: text("ifsc").notNull(),
+  bankName: text("bank_name").notNull().default(""),
+  status: text("status").notNull().default("pending_verification"),
+  razorpayLinkedAccountId: text("razorpay_linked_account_id"),
+  approvedBy: uuid("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  rejectionReason: text("rejection_reason"),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const payments = pgTable("payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  residentId: uuid("resident_id").notNull(),
+  provider: text("provider").notNull().default("fake"),
+  providerOrderId: text("provider_order_id").notNull(),
+  providerPaymentId: text("provider_payment_id"),
+  amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
+  currency: text("currency").notNull().default("INR"),
+  status: text("status").notNull().default("pending"),
+  metadata: jsonb("metadata").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const paymentAllocations = pgTable("payment_allocations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  societyId: uuid("society_id").notNull(),
+  paymentId: uuid("payment_id").notNull(),
+  billId: uuid("bill_id").notNull(),
+  amountPaise: bigint("amount_paise", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const gatewayEvents = pgTable("gateway_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  provider: text("provider").notNull(),
+  eventId: text("event_id").notNull(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

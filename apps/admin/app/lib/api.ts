@@ -241,4 +241,79 @@ export const api = {
 
   getBill: (billId: string) =>
     apiFetch<Bill & { lineItems: BillLineItem[]; unit: Unit | null }>(`/admin/billing/bills/${billId}`),
+
+  // ── Payments ───────────────────────────────────────────────────────────────
+
+  listPayments: () => apiFetch<Payment[]>("/admin/payments"),
+
+  reconcilePayments: () =>
+    apiFetch<{ reconciled: number; checked: number }>("/admin/payments/reconcile", { method: "POST" }),
+
+  // ── Bank accounts ──────────────────────────────────────────────────────────
+
+  listBankAccounts: () => apiFetch<BankAccount[]>("/admin/bank-accounts"),
+
+  submitBankAccount: (input: { accountName: string; accountNumber: string; ifsc: string; bankName: string }) =>
+    apiFetch<BankAccount>("/admin/bank-accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+
+  approveBankAccount: (societyId: string, id: string) =>
+    apiFetch<BankAccount>(`/admin/societies/${societyId}/bank-accounts/${id}/approve`, { method: "POST" }),
+
+  rejectBankAccount: (societyId: string, id: string, reason: string) =>
+    apiFetch<BankAccount>(`/admin/societies/${societyId}/bank-accounts/${id}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    }),
+
+  // ── Audit log ──────────────────────────────────────────────────────────────
+
+  listAuditLog: () => apiFetch<AuditLogEntry[]>("/admin/audit-log"),
+};
+
+export type Payment = {
+  id: string;
+  residentId: string;
+  provider: string;
+  providerOrderId: string;
+  providerPaymentId: string | null;
+  amountPaise: number;
+  amountRupees: number;
+  currency: string;
+  status: string;
+  metadata: object;
+  createdAt: string;
+};
+
+export type BankAccount = {
+  id: string;
+  societyId: string;
+  accountName: string;
+  accountNumberLast4: string;
+  ifsc: string;
+  bankName: string;
+  status: string;
+  razorpayLinkedAccountId: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  rejectionReason: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AuditLogEntry = {
+  id: string;
+  actorId: string | null;
+  actorKind: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  beforeState: unknown;
+  afterState: unknown;
+  createdAt: string;
 };

@@ -12,7 +12,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().url(),
   SEED_ENABLED: z.coerce.boolean().default(false),
   SMS_PROVIDER: z.enum(["console"]).default("console"),
-  PAYMENT_PROVIDER: z.enum(["fake"]).default("fake"),
+  PAYMENT_PROVIDER: z.enum(["fake", "razorpay"]).default("fake"),
   JWT_SECRET: z.string().min(16),
 });
 

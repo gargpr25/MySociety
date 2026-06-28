@@ -14,6 +14,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <a href="/import" style={{ marginRight: "1rem" }}>Import CSV</a>
           <a href="/notices" style={{ marginRight: "1rem" }}>Notices</a>
           <a href="/billing" style={{ marginRight: "1rem" }}>Billing</a>
+          <a href="/payments" style={{ marginRight: "1rem" }}>Payments</a>
+          <a href="/bank" style={{ marginRight: "1rem" }}>Bank Account</a>
           <a href="/login">Login / Logout</a>
         </nav>
         {children}

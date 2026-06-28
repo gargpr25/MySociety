@@ -1,17 +1,22 @@
 import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
-import type { SmsProvider } from "@mysociety/config";
+import type { PaymentProvider, SmsProvider } from "@mysociety/config";
+import type { Database } from "@mysociety/db";
 import type { TenantAwareDb } from "./db.js";
 import { registerAdminBillingRoutes } from "./routes/admin-billing.js";
+import { registerAdminBankRoutes } from "./routes/admin-bank.js";
 import { registerAdminDirectoryRoutes } from "./routes/admin-directory.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerNoticeRoutes } from "./routes/notices.js";
+import { registerPaymentRoutes } from "./routes/payments.js";
 import { registerResidentBillingRoutes } from "./routes/resident-billing.js";
 
 export interface BuildAppOptions {
   tenantDb?: TenantAwareDb;
+  superAdminDb?: Database;
   jwtSecret?: string;
   smsProvider?: SmsProvider;
+  paymentProvider?: PaymentProvider;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -49,6 +54,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
     });
+
+    if (options.paymentProvider && options.superAdminDb) {
+      registerPaymentRoutes(app, {
+        tenantDb: options.tenantDb,
+        superAdminDb: options.superAdminDb,
+        jwtSecret: options.jwtSecret,
+        paymentProvider: options.paymentProvider,
+      });
+      registerAdminBankRoutes(app, {
+        tenantDb: options.tenantDb,
+        superAdminDb: options.superAdminDb,
+        jwtSecret: options.jwtSecret,
+        paymentProvider: options.paymentProvider,
+      });
+    }
   }
 
   return app;

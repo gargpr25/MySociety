@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, getToken, type Bill, type BillLineItem } from "../../lib/api";
+import { api, getToken, type Bill, type BillLineItem, type PaymentOrder } from "../../lib/api";
 
 const STATUS_COLORS: Record<string, string> = {
   paid: "#0a7",
@@ -18,12 +18,31 @@ export default function BillDetailPage() {
   const router = useRouter();
   const [bill, setBill] = useState<BillDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [payResult, setPayResult] = useState<PaymentOrder | null>(null);
 
   useEffect(() => {
     if (!getToken()) { router.replace("/login"); return; }
     if (!id) return;
     api.getBill(id).then(setBill).catch((e: Error) => setError(e.message));
   }, [id, router]);
+
+  async function handlePay() {
+    if (!bill) return;
+    setPaying(true);
+    setError(null);
+    try {
+      const order = await api.createPaymentOrder(bill.id);
+      setPayResult(order);
+      // In production, open Razorpay Checkout here using order.providerOrderId.
+      // For the fake provider, we show the order details so the developer can
+      // simulate the webhook manually or via a test harness.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPaying(false);
+    }
+  }
 
   if (!bill) {
     return <p style={{ padding: "1rem", color: "#888" }}>{error ?? "Loading…"}</p>;
@@ -98,14 +117,14 @@ export default function BillDetailPage() {
         )}
       </section>
 
-      <section style={{ marginTop: "1.5rem" }}>
+      <section style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
         <a
           href={api.invoicePdfUrl(bill.id)}
           download
           style={{
             display: "inline-block",
             padding: "0.6rem 1.2rem",
-            background: "#1a73e8",
+            background: "#555",
             color: "#fff",
             borderRadius: 6,
             textDecoration: "none",
@@ -114,7 +133,34 @@ export default function BillDetailPage() {
         >
           Download Invoice PDF
         </a>
+
+        {bill.status !== "paid" && balance > 0 && (
+          <button
+            onClick={handlePay}
+            disabled={paying}
+            style={{
+              padding: "0.6rem 1.2rem",
+              background: "#0a7",
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              cursor: "pointer",
+              fontSize: "0.9rem",
+            }}
+          >
+            {paying ? "Creating order…" : `Pay ₹${balance.toFixed(2)}`}
+          </button>
+        )}
       </section>
+
+      {payResult && (
+        <section style={{ marginTop: "1rem", background: "#f0fff4", border: "1px solid #0a7", borderRadius: 6, padding: "0.75rem 1rem" }}>
+          <p style={{ fontSize: "0.85rem", color: "#0a7", margin: 0 }}>
+            Payment order created (ID: <code>{payResult.providerOrderId}</code>). Amount: ₹{(payResult.amountPaise / 100).toFixed(2)}.
+            The Razorpay checkout would open here in production.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

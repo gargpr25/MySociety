@@ -1,4 +1,5 @@
 export { createDb, createPool, type Database } from "./client.js";
+
 export { withTenantContext } from "./tenant-context.js";
 export { runMigrations } from "./migrate.js";
 export * as schema from "./schema.js";
@@ -87,3 +88,31 @@ export {
   updateNotice,
   type NoticeAudience,
 } from "./repositories/notices.js";
+export {
+  applyPaymentToBill,
+  createBankAccount,
+  createPayment,
+  createPaymentAllocations,
+  findBankAccountById,
+  findPaymentById,
+  findPaymentByProviderOrderId,
+  insertAuditLog,
+  listAllocationsByBillId,
+  listAllocationsByPaymentId,
+  listAuditLog,
+  listBankAccounts,
+  listPaymentsByResident,
+  listPaymentsBySociety,
+  listPendingPaymentsOlderThan,
+  markGatewayEventProcessed,
+  sumAllocationsForBills,
+  updateBankAccountStatus,
+  updatePaymentCaptured,
+  updatePaymentFailed,
+  upsertGatewayEvent,
+  type AuditLogRow,
+  type BankAccountRow,
+  type GatewayEventRow,
+  type PaymentAllocationRow,
+  type PaymentRow,
+} from "./repositories/payments.js";
