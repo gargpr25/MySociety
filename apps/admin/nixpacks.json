@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schema.nixpacks.com/nixpacks.schema.json",
+  "providers": ["node"],
+  "buildCmd": "pnpm install --frozen-lockfile && pnpm --filter @mysociety/admin build",
+  "startCmd": "node apps/admin/.next/standalone/server.js"
+}
