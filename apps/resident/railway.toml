@@ -1,0 +1,7 @@
+[build]
+buildCommand = "ROOT=$(git rev-parse --show-toplevel) && cd $ROOT && pnpm install --frozen-lockfile && pnpm --filter @mysociety/resident build && cp -r apps/resident/.next/static apps/resident/.next/standalone/.next/static && cp -r apps/resident/public apps/resident/.next/standalone/public"
+
+[deploy]
+startCommand = "node .next/standalone/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 60
