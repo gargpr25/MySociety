@@ -1,0 +1,11 @@
+[build]
+# Go to the repo root so pnpm can resolve workspace packages, then build only this app.
+buildCommand = "ROOT=$(git rev-parse --show-toplevel) && cd $ROOT && pnpm install --frozen-lockfile && pnpm --filter @mysociety/api build"
+
+[deploy]
+# Migrations run first (uses DATABASE_URL which Railway provides as a superuser URL).
+# The API then starts on the PORT Railway injects.
+startCommand = "node dist/server.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "on_failure"
