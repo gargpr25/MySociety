@@ -74,3 +74,59 @@ seed test suites default to `postgresql://postgres:postgres@localhost:5432/mysoc
 and `postgresql://app_user:app_user_dev_password@localhost:5432/mysociety_test`
 unless `TEST_ADMIN_DATABASE_URL` / `TEST_DATABASE_URL` are set, and apply
 migrations to that database automatically before asserting tenant isolation.
+
+## Deploying to Railway
+
+The repo includes a `railway.toml` and per-app `nixpacks.json` files that
+configure the three services on [Railway](https://railway.com).
+
+### One-time project setup
+
+1. [Install the Railway CLI](https://docs.railway.com/develop/cli) and log in:
+
+   ```sh
+   npm i -g @railway/cli
+   railway login
+   ```
+
+2. Create a new Railway project and link it to this repo:
+
+   ```sh
+   railway init          # creates a new project
+   railway link          # link local directory to the project
+   ```
+
+3. Add the managed PostgreSQL and Redis plugins (Railway auto-injects their
+   connection URLs as `DATABASE_URL` and `REDIS_URL`):
+
+   ```sh
+   railway add --plugin postgresql
+   railway add --plugin redis
+   ```
+
+4. Set the remaining environment variables on each service (use the Railway
+   dashboard **Variables** tab, or the CLI):
+
+   | Variable | Notes |
+   |---|---|
+   | `ADMIN_DATABASE_URL` | Superuser Postgres URL — use the Railway dashboard to set this to the PostgreSQL plugin's `DATABASE_PUBLIC_URL` with the superuser credentials |
+   | `JWT_SECRET` | Random string ≥ 16 chars |
+   | `INTEGRATION_ENCRYPTION_KEY` | 64 hex chars — generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+   | `API_URL` | The Railway URL of the **api** service (e.g. `https://api-mysociety.up.railway.app`) — set this on the **admin** and **resident** services |
+   | `NODE_ENV` | `production` |
+
+5. Deploy all services:
+
+   ```sh
+   railway up
+   ```
+
+   The **api** service build command runs `pnpm --filter @mysociety/db migrate`
+   automatically before starting, so no manual migration step is needed on
+   first deploy or after schema changes.
+
+6. (Optional) Seed synthetic data as a one-off job:
+
+   ```sh
+   railway run --service api -- sh -c "SEED_ENABLED=true pnpm --filter @mysociety/seed run seed"
+   ```

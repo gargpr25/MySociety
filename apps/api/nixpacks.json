@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schema.nixpacks.com/nixpacks.schema.json",
+  "providers": ["node"],
+  "buildCmd": "pnpm install --frozen-lockfile && pnpm --filter @mysociety/db migrate && pnpm --filter @mysociety/api build",
+  "startCmd": "node apps/api/dist/server.js"
+}

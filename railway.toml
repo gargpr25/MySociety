@@ -1,0 +1,57 @@
+# Railway monorepo configuration
+# https://docs.railway.com/reference/config-as-code
+#
+# This file declares the three application services.
+# PostgreSQL and Redis are added as Railway plugins/add-ons in the dashboard
+# (or via the Railway CLI: `railway add --plugin postgresql` / `railway add --plugin redis`).
+# Railway auto-injects DATABASE_URL and REDIS_URL from those plugins; set the
+# remaining variables listed in .env.example in the Railway service environment.
+
+[build]
+builder = "NIXPACKS"
+
+# ---------------------------------------------------------------------------
+# API  (Fastify / Node.js)
+# ---------------------------------------------------------------------------
+[[services]]
+name = "api"
+source = "apps/api"
+
+[services.build]
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @mysociety/db migrate && pnpm build"
+
+[services.deploy]
+startCommand = "node apps/api/dist/server.js"
+healthcheckPath = "/healthz"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# ---------------------------------------------------------------------------
+# Admin console  (Next.js)
+# ---------------------------------------------------------------------------
+[[services]]
+name = "admin"
+source = "apps/admin"
+
+[services.build]
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @mysociety/admin build"
+
+[services.deploy]
+startCommand = "node apps/admin/.next/standalone/server.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# ---------------------------------------------------------------------------
+# Resident PWA  (Next.js)
+# ---------------------------------------------------------------------------
+[[services]]
+name = "resident"
+source = "apps/resident"
+
+[services.build]
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @mysociety/resident build"
+
+[services.deploy]
+startCommand = "node apps/resident/.next/standalone/server.js"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
