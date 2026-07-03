@@ -1,5 +1,8 @@
 [build]
-buildCommand = "ROOT=$(git rev-parse --show-toplevel) && cd $ROOT && pnpm install --frozen-lockfile && pnpm --filter @mysociety/admin build && cp -r apps/admin/.next/static apps/admin/.next/standalone/.next/static"
+# Disable railpack's auto-detected npm install — root directory is apps/admin which has no
+# pnpm-lock.yaml, so railpack defaults to npm which cannot resolve workspace:* dependencies.
+installCommand = ""
+buildCommand = "npm install -g pnpm@10.33.0 && ROOT=$(git rev-parse --show-toplevel) && cd $ROOT && pnpm install --frozen-lockfile && pnpm --filter @mysociety/admin build && cp -r apps/admin/.next/static apps/admin/.next/standalone/.next/static"
 
 [deploy]
 startCommand = "node .next/standalone/server.js"
