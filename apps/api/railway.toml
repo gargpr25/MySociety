@@ -13,7 +13,3 @@ healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 
-[deploy.variables]
-# Skip Railpack's auto-detected install step (npm) — the buildCommand already
-# handles dependency installation via pnpm from the monorepo root.
-RAILPACK_INSTALL_CMD = ""
