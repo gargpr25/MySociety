@@ -1,19 +1,12 @@
 [build]
-# Disable railpack's auto-detected npm install — root directory is apps/api which has no
-# pnpm-lock.yaml, so railpack defaults to npm which cannot resolve workspace:* dependencies.
-# Our buildCommand handles install from the repo root using pnpm instead.
+# installCommand="" stops railpack from auto-detecting npm (no pnpm-lock.yaml in this dir).
+# buildCommand navigates to repo root with cd ../.. (reliable; no git required),
+# then installs pnpm via npm (always available) and runs the workspace build.
 installCommand = ""
-buildCommand = "npm install -g pnpm@10.33.0 && ROOT=$(git rev-parse --show-toplevel) && cd $ROOT && pnpm install --frozen-lockfile && pnpm --filter @mysociety/api build"
+buildCommand = "npm install -g pnpm@10.33.0 && cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @mysociety/api build"
 
 [deploy]
-# Migrations run first (uses DATABASE_URL which Railway provides as a superuser URL).
-# The API then starts on the PORT Railway injects.
 startCommand = "node dist/server.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
-
-[deploy.variables]
-# Skip Railpack's auto-detected install step (npm) — the buildCommand already
-# handles dependency installation via pnpm from the monorepo root.
-RAILPACK_INSTALL_CMD = ""
