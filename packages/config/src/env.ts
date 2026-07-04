@@ -9,7 +9,9 @@ const envSchema = z.object({
   // Elevated connection used only by the migration runner (DDL, role/grant
   // management). Never used for tenant-scoped reads/writes.
   ADMIN_DATABASE_URL: z.string().url().optional(),
-  REDIS_URL: z.string().url(),
+  // Optional until a BullMQ/Redis-backed queue is wired up. Set via the
+  // Railway Redis plugin (auto-injected as REDIS_URL) when jobs are added.
+  REDIS_URL: z.string().url().optional(),
   SEED_ENABLED: z.coerce.boolean().default(false),
   SMS_PROVIDER: z.enum(["console"]).default("console"),
   PAYMENT_PROVIDER: z.enum(["fake", "razorpay"]).default("fake"),

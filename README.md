@@ -74,3 +74,49 @@ seed test suites default to `postgresql://postgres:postgres@localhost:5432/mysoc
 and `postgresql://app_user:app_user_dev_password@localhost:5432/mysociety_test`
 unless `TEST_ADMIN_DATABASE_URL` / `TEST_DATABASE_URL` are set, and apply
 migrations to that database automatically before asserting tenant isolation.
+
+## Deploying to Railway
+
+The repo includes per-app `railway.toml` and `railpack.json` files that
+configure the three services on [Railway](https://railway.com).
+
+### One-time project setup
+
+1. Create a new Railway project and connect it to this GitHub repo.
+
+2. Add a **PostgreSQL** database service (Railway auto-injects `DATABASE_URL`).
+
+3. Create three services — **api**, **admin**, **resident** — each pointing at
+   this repo. For each service, set **Root Directory** in Settings:
+
+   | Service | Root Directory |
+   |---------|----------------|
+   | api | `apps/api` |
+   | admin | `apps/admin` |
+   | resident | `apps/resident` |
+
+4. Set environment variables on the **api** service:
+
+   | Variable | Value |
+   |----------|-------|
+   | `DATABASE_URL` | Auto-injected by Railway Postgres plugin |
+   | `JWT_SECRET` | Random string ≥ 16 chars |
+   | `INTEGRATION_ENCRYPTION_KEY` | 64 hex chars — `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+   | `NODE_ENV` | `production` |
+
+5. Set on **admin** and **resident** services:
+
+   | Variable | Value |
+   |----------|-------|
+   | `API_URL` | Internal URL of the api service (e.g. `https://api-mysociety.up.railway.app`) |
+   | `NODE_ENV` | `production` |
+
+6. Deploy. The api service runs migrations automatically on startup — no manual
+   migration step required.
+
+7. (Optional) Seed synthetic data as a one-off job:
+
+   ```sh
+   # From Railway dashboard: api service → Run command
+   SEED_ENABLED=true node -e "import('./dist/seed-runner.js')"
+   ```
