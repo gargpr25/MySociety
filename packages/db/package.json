@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "migrate": "tsx src/migrate.ts"
+    "migrate": "tsx src/migrate.ts",
+    "migrate:compiled": "node dist/migrate.js"
   },
   "dependencies": {
     "@mysociety/config": "workspace:*",

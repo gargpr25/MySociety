@@ -96,20 +96,22 @@ configure the three services on [Railway](https://railway.com).
    railway link          # link local directory to the project
    ```
 
-3. Add the managed PostgreSQL and Redis plugins (Railway auto-injects their
-   connection URLs as `DATABASE_URL` and `REDIS_URL`):
+3. Add the managed PostgreSQL plugin (Railway auto-injects `DATABASE_URL`):
 
    ```sh
    railway add --plugin postgresql
-   railway add --plugin redis
    ```
 
-4. Set the remaining environment variables on each service (use the Railway
-   dashboard **Variables** tab, or the CLI):
+   > **Redis** is listed in the schema for future use but is not yet required.
+   > Skip adding it for now unless a queue-backed feature is enabled.
+
+4. Set the remaining environment variables on the **api** service (use the
+   Railway dashboard **Variables** tab, or the CLI):
 
    | Variable | Notes |
    |---|---|
-   | `ADMIN_DATABASE_URL` | Superuser Postgres URL — use the Railway dashboard to set this to the PostgreSQL plugin's `DATABASE_PUBLIC_URL` with the superuser credentials |
+   | `ADMIN_DATABASE_URL` | Superuser Postgres URL for running migrations. Set this to the `DATABASE_URL` (or `DATABASE_PUBLIC_URL`) value shown in the Railway PostgreSQL plugin. If left unset, `DATABASE_URL` is used as a fallback — fine for Railway's default superuser connection. |
+   | `DATABASE_URL` | By default Railway injects this as a superuser connection. For production with RLS enforcement, change this to the `app_user` connection after the first deploy: `******<same-host>/<same-db>` |
    | `JWT_SECRET` | Random string ≥ 16 chars |
    | `INTEGRATION_ENCRYPTION_KEY` | 64 hex chars — generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
    | `API_URL` | The Railway URL of the **api** service (e.g. `https://api-mysociety.up.railway.app`) — set this on the **admin** and **resident** services |
@@ -121,9 +123,9 @@ configure the three services on [Railway](https://railway.com).
    railway up
    ```
 
-   The **api** service build command runs `pnpm --filter @mysociety/db migrate`
-   automatically before starting, so no manual migration step is needed on
-   first deploy or after schema changes.
+   The **api** service startup command runs migrations automatically before
+   starting, so no manual migration step is needed on first deploy or after
+   schema changes.
 
 6. (Optional) Seed synthetic data as a one-off job:
 

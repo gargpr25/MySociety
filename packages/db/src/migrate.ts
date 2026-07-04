@@ -1,7 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadEnv } from "@mysociety/config";
 import { Pool } from "pg";
 
 const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../migrations");
@@ -63,10 +62,13 @@ async function applyMigrations(pool: Pool): Promise<string[]> {
 }
 
 async function main() {
-  const env = loadEnv();
-  const adminUrl = env.ADMIN_DATABASE_URL;
+  // Prefer a dedicated superuser URL (needed for DDL + GRANT statements) but
+  // fall back to DATABASE_URL so first-time Railway deploys work without
+  // manual setup. On Railway the auto-injected DATABASE_URL is a superuser
+  // connection, so it can run migrations safely.
+  const adminUrl = process.env.ADMIN_DATABASE_URL ?? process.env.DATABASE_URL;
   if (!adminUrl) {
-    throw new Error("ADMIN_DATABASE_URL must be set to run migrations.");
+    throw new Error("Either ADMIN_DATABASE_URL or DATABASE_URL must be set to run migrations.");
   }
   const pool = new Pool({ connectionString: adminUrl });
   try {
