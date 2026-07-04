@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.nixpacks.com/nixpacks.schema.json",
   "providers": ["node"],
-  "buildCmd": "pnpm install --frozen-lockfile && pnpm --filter @mysociety/admin build",
+  "installCmd": "corepack enable && pnpm install --frozen-lockfile",
+  "buildCmd": "pnpm --filter @mysociety/admin build",
   "startCmd": "pnpm --filter @mysociety/admin start"
 }

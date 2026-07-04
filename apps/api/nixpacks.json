@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.nixpacks.com/nixpacks.schema.json",
   "providers": ["node"],
-  "buildCmd": "pnpm install --frozen-lockfile && pnpm --filter @mysociety/types build && pnpm --filter @mysociety/config build && pnpm --filter @mysociety/db build && pnpm --filter @mysociety/api build",
+  "installCmd": "corepack enable && pnpm install --frozen-lockfile",
+  "buildCmd": "pnpm --filter @mysociety/types build && pnpm --filter @mysociety/config build && pnpm --filter @mysociety/db build && pnpm --filter @mysociety/api build",
   "startCmd": "pnpm --filter @mysociety/db migrate:compiled && pnpm --filter @mysociety/api start"
 }
