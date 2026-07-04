@@ -130,11 +130,18 @@ describe("Chat — message routing and ticket creation", () => {
     const ctx = await setupSociety("electric");
     const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET });
 
-    const res = await app.inject({
+    await app.inject({
       method: "POST",
       url: "/resident/chat/message",
       headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
       body: JSON.stringify({ message: "the light in my bedroom is not working" }),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/resident/chat/message",
+      headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ message: "yes" }),
     });
 
     expect(res.statusCode).toBe(200);
@@ -172,6 +179,12 @@ describe("Chat — message routing and ticket creation", () => {
       headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
       body: JSON.stringify({ message: "there is a leak in my bathroom pipe" }),
     });
+    await app.inject({
+      method: "POST",
+      url: "/resident/chat/message",
+      headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ message: "yes" }),
+    });
 
     // Now ask for status
     const res = await app.inject({
@@ -191,11 +204,18 @@ describe("Chat — message routing and ticket creation", () => {
     const ctx = await setupSociety("noresolve");
     const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET });
 
-    const res = await app.inject({
+    await app.inject({
       method: "POST",
       url: "/resident/chat/message",
       headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
       body: JSON.stringify({ message: "my fan is making noise, please fix it" }),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/resident/chat/message",
+      headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ message: "yes" }),
     });
 
     expect(res.statusCode).toBe(200);
