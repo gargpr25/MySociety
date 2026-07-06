@@ -1,0 +1,43 @@
+steps:
+  # Build API image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/api:$COMMIT_SHA', '-f', 'apps/api/Dockerfile', '.']
+    id: 'build-api'
+
+  # Build Admin image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/admin:$COMMIT_SHA', '-f', 'apps/admin/Dockerfile', '.']
+    id: 'build-admin'
+
+  # Build Resident image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/resident:$COMMIT_SHA', '-f', 'apps/resident/Dockerfile', '.']
+    id: 'build-resident'
+
+  # Push API image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/api:$COMMIT_SHA']
+    id: 'push-api'
+
+  # Push Admin image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/admin:$COMMIT_SHA']
+    id: 'push-admin'
+
+  # Push Resident image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/resident:$COMMIT_SHA']
+    id: 'push-resident'
+
+substitutions:
+  _REGION: us-central1
+  _REPO_NAME: mysociety-repo
+
+images:
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/api:$COMMIT_SHA'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/admin:$COMMIT_SHA'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/resident:$COMMIT_SHA'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
