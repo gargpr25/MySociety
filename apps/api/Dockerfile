@@ -24,6 +24,7 @@ RUN pnpm install --frozen-lockfile
 # Build the project and its dependencies
 COPY --from=builder /app/out/full/ .
 COPY turbo.json turbo.json
+COPY tsconfig.base.json tsconfig.base.json
 RUN pnpm turbo run build --filter=@mysociety/api...
 
 FROM base AS runner

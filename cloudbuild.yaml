@@ -6,12 +6,12 @@ steps:
 
   # Build Admin image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/admin:$COMMIT_SHA', '-f', 'apps/admin/Dockerfile', '.']
+    args: ['build', '--build-arg', 'NEXT_PUBLIC_API_URL=$_API_URL', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/admin:$COMMIT_SHA', '-f', 'apps/admin/Dockerfile', '.']
     id: 'build-admin'
 
   # Build Resident image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/resident:$COMMIT_SHA', '-f', 'apps/resident/Dockerfile', '.']
+    args: ['build', '--build-arg', 'NEXT_PUBLIC_API_URL=$_API_URL', '-t', '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/resident:$COMMIT_SHA', '-f', 'apps/resident/Dockerfile', '.']
     id: 'build-resident'
 
   # Push API image
@@ -32,6 +32,7 @@ steps:
 substitutions:
   _REGION: us-central1
   _REPO_NAME: mysociety-repo
+  _API_URL: ""
 
 images:
   - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO_NAME/api:$COMMIT_SHA'
