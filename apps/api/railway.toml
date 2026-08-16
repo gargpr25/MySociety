@@ -5,7 +5,10 @@
 # pnpm comes from railpack's corepack activation — installing it again with
 # `npm install -g pnpm` collides with the corepack shims (EEXIST on pnpx).
 installCommand = ""
-buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @mysociety/api build"
+# `turbo run build --filter=@mysociety/api...` also builds the workspace
+# packages the api imports (db/types/config); a bare `pnpm --filter` build only
+# runs tsc for the api itself and fails on the missing dependency .d.ts files.
+buildCommand = "pnpm install --frozen-lockfile && pnpm exec turbo run build --filter=@mysociety/api..."
 
 [deploy]
 startCommand = "node apps/api/dist/server.js"

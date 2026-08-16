@@ -10,7 +10,10 @@ installCommand = ""
 buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @mysociety/admin build && cp -r apps/admin/.next/static apps/admin/.next/standalone/apps/admin/.next/static"
 
 [deploy]
-startCommand = "node apps/admin/.next/standalone/apps/admin/server.js"
+# HOSTNAME=0.0.0.0 is required: Railway sets HOSTNAME to the container id, and
+# the Next standalone server binds to it instead of all interfaces, so the
+# healthcheck can never reach the app.
+startCommand = "HOSTNAME=0.0.0.0 node apps/admin/.next/standalone/apps/admin/server.js"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
