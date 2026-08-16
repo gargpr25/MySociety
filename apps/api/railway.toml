@@ -1,9 +1,10 @@
 [build]
 # installCommand="" stops railpack from auto-detecting npm (no pnpm-lock.yaml in this dir).
-# buildCommand navigates to repo root with cd ../.. (reliable; no git required),
-# then installs pnpm via npm (always available) and runs the workspace build.
+# buildCommand navigates to repo root with cd ../.. (reliable; no git required).
+# pnpm comes from railpack's corepack activation — installing it again with
+# `npm install -g pnpm` collides with the corepack shims (EEXIST on pnpx).
 installCommand = ""
-buildCommand = "npm install -g pnpm@10.33.0 && cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @mysociety/api build"
+buildCommand = "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @mysociety/api build"
 
 [deploy]
 startCommand = "node dist/server.js"

@@ -1,8 +1,10 @@
 [build]
 # installCommand="" stops railpack from auto-detecting npm (no pnpm-lock.yaml in this dir).
 # cd ../.. navigates from apps/resident to repo root without needing git.
+# pnpm comes from railpack's corepack activation — installing it again with
+# `npm install -g pnpm` collides with the corepack shims (EEXIST on pnpx).
 installCommand = ""
-buildCommand = "npm install -g pnpm@10.33.0 && cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @mysociety/resident build && cp -r apps/resident/.next/static apps/resident/.next/standalone/.next/static && cp -r apps/resident/public apps/resident/.next/standalone/public"
+buildCommand = "cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @mysociety/resident build && cp -r apps/resident/.next/static apps/resident/.next/standalone/.next/static && cp -r apps/resident/public apps/resident/.next/standalone/public"
 
 [deploy]
 startCommand = "node .next/standalone/server.js"
