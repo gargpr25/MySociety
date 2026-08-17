@@ -1,11 +1,20 @@
 [build]
-# installCommand="" stops railpack from auto-detecting npm (no pnpm-lock.yaml in this dir).
-# cd ../.. navigates from apps/resident to repo root without needing git.
+# Railway builds this service with the repo root as the build context (the
+# service is configured via `Config-as-code: apps/resident/railway.toml`, with
+# no Root Directory override), so every path below is repo-root relative.
+# pnpm comes from railpack's corepack activation — installing it again with
+# `npm install -g pnpm` collides with the corepack shims (EEXIST on pnpx).
+# In a pnpm workspace, `output: "standalone"` nests the server under
+# .next/standalone/apps/resident/, and static/public assets must be copied in
+# beside it.
 installCommand = ""
-buildCommand = "npm install -g pnpm@10.33.0 && cd ../.. && pnpm install --frozen-lockfile && pnpm --filter @mysociety/resident build && cp -r apps/resident/.next/static apps/resident/.next/standalone/.next/static && cp -r apps/resident/public apps/resident/.next/standalone/public"
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @mysociety/resident build && cp -r apps/resident/.next/static apps/resident/.next/standalone/apps/resident/.next/static && cp -r apps/resident/public apps/resident/.next/standalone/apps/resident/public"
 
 [deploy]
-startCommand = "node .next/standalone/server.js"
+# HOSTNAME=0.0.0.0 is required: Railway sets HOSTNAME to the container id, and
+# the Next standalone server binds to it instead of all interfaces, so the
+# healthcheck can never reach the app.
+startCommand = "HOSTNAME=0.0.0.0 node apps/resident/.next/standalone/apps/resident/server.js"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
