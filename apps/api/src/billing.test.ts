@@ -5,6 +5,7 @@ import {
   createSociety,
   createTower,
   createUnit,
+  createUnitResident,
   findRoleByName,
   runMigrations,
 } from "@mysociety/db";
@@ -474,6 +475,41 @@ describe("Billing engine — cycle + bill generation", () => {
   });
 });
 
+// The CSV importer and the admin console attach residents to flats through
+// unit_residents and leave residents.unit_id null.
+async function setupResidentLinkedViaUnitResidents(societyId: string, unitId: string) {
+  const adminDb = createDb(adminPool);
+  const role = await findRoleByName(adminDb, "resident_owner");
+  if (!role) throw new Error("resident_owner role not seeded");
+
+  return tenantDb.withTenant(societyId, async (tx) => {
+    const resident = await createResident(tx, {
+      societyId,
+      roleId: role.id,
+      name: "Imported Resident",
+      mobile: `9${Math.floor(100_000_000 + Math.random() * 800_000_000)}`,
+    });
+    if (!resident) throw new Error("failed to create resident");
+    await createUnitResident(tx, {
+      societyId,
+      unitId,
+      residentId: resident.id,
+      relationship: "owner",
+      isPrimary: true,
+    });
+
+    const token = signAccessToken(JWT_SECRET, {
+      id: resident.id,
+      kind: "resident",
+      societyId,
+      role: "resident_owner",
+      name: resident.name,
+      identifier: resident.mobile,
+    });
+    return { resident, token };
+  });
+}
+
 describe("Billing engine — resident bill access", () => {
   it("resident can list and view their own bills", async () => {
     const { society, adminToken } = await setupSociety("Resident Bills");
@@ -518,6 +554,53 @@ describe("Billing engine — resident bill access", () => {
     const detail = detailRes.json<{ lineItems: { amount: number }[] }>();
     expect(detail.lineItems).toHaveLength(1);
     expect(detail.lineItems[0]!.amount).toBe(2500);
+
+    await app.close();
+  });
+
+  it("resident linked only through unit_residents can list and view their bills", async () => {
+    const { society, adminToken } = await setupSociety("Imported Resident Bills");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET });
+
+    await app.inject({
+      method: "POST",
+      url: "/admin/billing/heads",
+      headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Maintenance", computeRule: "fixed", rate: 3100 }),
+    });
+
+    const { unit } = await setupUnit(society.id);
+    const { token: residentToken } = await setupResidentLinkedViaUnitResidents(society.id, unit.id);
+
+    const cycleRes = await app.inject({
+      method: "POST",
+      url: "/admin/billing/cycles",
+      headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ period: "2026-12", dueDate: "2026-12-15" }),
+    });
+    const cycle = cycleRes.json<{ id: string }>();
+    await app.inject({
+      method: "POST",
+      url: `/admin/billing/cycles/${cycle.id}/generate`,
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+
+    const listRes = await app.inject({
+      method: "GET",
+      url: "/resident/bills",
+      headers: { Authorization: `Bearer ${residentToken}` },
+    });
+    expect(listRes.statusCode).toBe(200);
+    const bills = listRes.json<{ id: string; totalDue: number }[]>();
+    expect(bills).toHaveLength(1);
+    expect(bills[0]!.totalDue).toBe(3100);
+
+    const detailRes = await app.inject({
+      method: "GET",
+      url: `/resident/bills/${bills[0]!.id}`,
+      headers: { Authorization: `Bearer ${residentToken}` },
+    });
+    expect(detailRes.statusCode).toBe(200);
 
     await app.close();
   });

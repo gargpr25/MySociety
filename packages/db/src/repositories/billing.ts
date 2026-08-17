@@ -176,6 +176,15 @@ export async function listBillsByUnitId(db: Database, unitId: string) {
   return db.select().from(bills).where(eq(bills.unitId, unitId)).orderBy(desc(bills.dueDate));
 }
 
+export async function listBillsByUnitIds(db: Database, unitIds: string[]) {
+  if (unitIds.length === 0) return [];
+  return db
+    .select()
+    .from(bills)
+    .where(inArray(bills.unitId, unitIds))
+    .orderBy(desc(bills.dueDate));
+}
+
 export async function deleteBillsByCycleId(db: Database, cycleId: string) {
   await db.delete(bills).where(eq(bills.cycleId, cycleId));
 }

@@ -2,10 +2,10 @@ import type { FastifyInstance } from "fastify";
 import {
   findBillById,
   findBillingCycleById,
-  findResidentById,
   findUnitById,
-  listBillsByUnitId,
+  listBillsByUnitIds,
   listLineItemsByBillId,
+  listUnitIdsForResident,
 } from "@mysociety/db";
 import type { TenantAwareDb } from "../db.js";
 import { authenticate, requireRole } from "../auth/middleware.js";
@@ -27,13 +27,13 @@ export function registerResidentBillingRoutes(app: FastifyInstance, options: Res
     const residentId = request.principal?.id;
     if (!societyId || !residentId) return reply.code(400).send({ error: "Not scoped" });
 
-    const resident = await options.tenantDb.withTenant(societyId, (db) =>
-      findResidentById(db, residentId),
+    const unitIds = await options.tenantDb.withTenant(societyId, (db) =>
+      listUnitIdsForResident(db, residentId),
     );
-    if (!resident?.unitId) return reply.send([]);
+    if (unitIds.length === 0) return reply.send([]);
 
     const bills = await options.tenantDb.withTenant(societyId, (db) =>
-      listBillsByUnitId(db, resident.unitId!),
+      listBillsByUnitIds(db, unitIds),
     );
     return reply.send(bills.map(serializeBill));
   });
@@ -49,10 +49,10 @@ export function registerResidentBillingRoutes(app: FastifyInstance, options: Res
     const bill = await options.tenantDb.withTenant(societyId, (db) => findBillById(db, billId));
     if (!bill) return reply.code(404).send({ error: "Bill not found" });
 
-    const resident = await options.tenantDb.withTenant(societyId, (db) =>
-      findResidentById(db, residentId),
+    const unitIds = await options.tenantDb.withTenant(societyId, (db) =>
+      listUnitIdsForResident(db, residentId),
     );
-    if (resident?.unitId !== bill.unitId) return reply.code(404).send({ error: "Bill not found" });
+    if (!unitIds.includes(bill.unitId)) return reply.code(404).send({ error: "Bill not found" });
 
     const lineItems = await options.tenantDb.withTenant(societyId, (db) =>
       listLineItemsByBillId(db, billId),
@@ -75,10 +75,10 @@ export function registerResidentBillingRoutes(app: FastifyInstance, options: Res
     const bill = await options.tenantDb.withTenant(societyId, (db) => findBillById(db, billId));
     if (!bill) return reply.code(404).send({ error: "Bill not found" });
 
-    const resident = await options.tenantDb.withTenant(societyId, (db) =>
-      findResidentById(db, residentId),
+    const unitIds = await options.tenantDb.withTenant(societyId, (db) =>
+      listUnitIdsForResident(db, residentId),
     );
-    if (resident?.unitId !== bill.unitId) return reply.code(404).send({ error: "Bill not found" });
+    if (!unitIds.includes(bill.unitId)) return reply.code(404).send({ error: "Bill not found" });
 
     const [lineItems, cycle, unit] = await options.tenantDb.withTenant(societyId, async (db) => {
       const li = await listLineItemsByBillId(db, billId);

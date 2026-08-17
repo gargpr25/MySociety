@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { units } from "../schema.js";
 
@@ -40,6 +40,11 @@ export async function findUnitById(db: Database, id: string) {
 
 export async function listUnits(db: Database) {
   return db.select().from(units);
+}
+
+export async function listUnitsByIds(db: Database, ids: string[]) {
+  if (ids.length === 0) return [];
+  return db.select().from(units).where(inArray(units.id, ids));
 }
 
 export async function updateUnit(
