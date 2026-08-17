@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
-import { residents } from "../schema.js";
+import { residents, unitResidents } from "../schema.js";
 
 export async function createResident(
   db: Database,
@@ -39,8 +39,43 @@ export async function findResidentById(db: Database, id: string) {
   return row;
 }
 
+/**
+ * Residents living in a unit. unit_residents is the source of truth for the
+ * link (that is what the CSV importer, the admin console and the seed write);
+ * the denormalized residents.unit_id column is unioned in so rows predating
+ * the join table still resolve.
+ */
 export async function listResidentsByUnitId(db: Database, unitId: string) {
-  return db.select().from(residents).where(eq(residents.unitId, unitId));
+  const linkedResidentIds = db
+    .select({ residentId: unitResidents.residentId })
+    .from(unitResidents)
+    .where(eq(unitResidents.unitId, unitId));
+
+  return db
+    .select()
+    .from(residents)
+    .where(or(inArray(residents.id, linkedResidentIds), eq(residents.unitId, unitId)));
+}
+
+/**
+ * Every unit a resident is attached to — the inverse of listResidentsByUnitId,
+ * and the authorization source for "may this resident act on this unit?".
+ * A landlord or a family member can legitimately hold several units.
+ */
+export async function listUnitIdsForResident(db: Database, residentId: string): Promise<string[]> {
+  const [resident] = await db
+    .select({ unitId: residents.unitId })
+    .from(residents)
+    .where(eq(residents.id, residentId));
+
+  const links = await db
+    .select({ unitId: unitResidents.unitId })
+    .from(unitResidents)
+    .where(eq(unitResidents.residentId, residentId));
+
+  const unitIds = new Set(links.map((l) => l.unitId));
+  if (resident?.unitId) unitIds.add(resident.unitId);
+  return [...unitIds];
 }
 
 /**

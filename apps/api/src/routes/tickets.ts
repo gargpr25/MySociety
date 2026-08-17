@@ -8,6 +8,7 @@ import {
   listTicketEvents,
   listTicketsByResident,
   listTicketsBySociety,
+  listUnitIdsForResident,
   markTicketsSlaBreached,
   updateTicketStatus,
 } from "@mysociety/db";
@@ -47,10 +48,19 @@ export function registerTicketRoutes(app: FastifyInstance, options: TicketRouteO
     const parsed = createTicketSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
 
+    const unitIds = await tenantDb.withTenant(societyId, (db) =>
+      listUnitIdsForResident(db, principal.id),
+    );
+    if (parsed.data.unitId && !unitIds.includes(parsed.data.unitId)) {
+      return reply.code(403).send({ error: "Resident is not attached to this unit" });
+    }
+    // Residents attached to exactly one unit need not send it.
+    const unitId = parsed.data.unitId ?? (unitIds.length === 1 ? unitIds[0] : undefined);
+
     const ticket = await tenantDb.withTenant(societyId, (db) =>
       createTicket(db, {
         societyId,
-        unitId: parsed.data.unitId,
+        unitId,
         raisedBy: principal.id,
         type: parsed.data.type,
         category: parsed.data.category,

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type BookableResource, type ResidentBooking } from "../lib/api";
+import { api, type BookableResource, type ResidentBooking, type ResidentUnit } from "../lib/api";
 
 export default function BookingsPage() {
   const [resources, setResources] = useState<BookableResource[]>([]);
   const [bookings, setBookings] = useState<ResidentBooking[]>([]);
+  const [units, setUnits] = useState<ResidentUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedResource, setSelectedResource] = useState("");
@@ -17,9 +18,11 @@ export default function BookingsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [r, b] = await Promise.all([api.listResources(), api.listBookings()]);
+      const [r, b, u] = await Promise.all([api.listResources(), api.listBookings(), api.listMyUnits()]);
       setResources(r);
       setBookings(b);
+      setUnits(u);
+      if (u.length === 1) setUnitId(u[0]!.id);
     } catch (e) {
       console.error(e);
     } finally {
@@ -34,13 +37,13 @@ export default function BookingsPage() {
     try {
       await api.createBooking({
         resourceId: selectedResource,
-        unitId: unitId.trim(),
+        unitId,
         slotStart: new Date(slotStart).toISOString(),
         slotEnd: new Date(slotEnd).toISOString(),
       });
       setMsg("Booking confirmed!");
       setShowForm(false);
-      setSelectedResource(""); setUnitId(""); setSlotStart(""); setSlotEnd("");
+      setSelectedResource(""); setSlotStart(""); setSlotEnd("");
       await load();
     } catch (err: unknown) {
       setMsg(err instanceof Error ? err.message : "Error");
@@ -80,8 +83,18 @@ export default function BookingsPage() {
               <option key={r.id} value={r.id}>{r.name} (capacity: {r.capacity})</option>
             ))}
           </select>
-          <label style={{ fontWeight: 600 }}>Unit ID (UUID)</label>
-          <input value={unitId} onChange={(e) => setUnitId(e.target.value)} required placeholder="your unit UUID" style={{ padding: "0.4rem", fontFamily: "monospace", borderRadius: 4, border: "1px solid #d1d5db" }} />
+          <label style={{ fontWeight: 600 }}>Flat</label>
+          <select value={unitId} onChange={(e) => setUnitId(e.target.value)} required style={{ padding: "0.4rem", borderRadius: 4, border: "1px solid #d1d5db" }}>
+            <option value="">Select your flat…</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.flatNo}</option>
+            ))}
+          </select>
+          {units.length === 0 && (
+            <p style={{ color: "#b45309", fontSize: 13, margin: 0 }}>
+              No flat is linked to your account yet — ask the society office to add you to a unit.
+            </p>
+          )}
           <label style={{ fontWeight: 600 }}>Slot Start</label>
           <input type="datetime-local" value={slotStart} onChange={(e) => setSlotStart(e.target.value)} required style={{ padding: "0.4rem", borderRadius: 4, border: "1px solid #d1d5db" }} />
           <label style={{ fontWeight: 600 }}>Slot End</label>

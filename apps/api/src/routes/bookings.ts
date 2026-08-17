@@ -13,6 +13,8 @@ import {
   listBookingsBySociety,
   listParkingAllocations,
   listResources,
+  listUnitIdsForResident,
+  listUnitsByIds,
   updateResource,
 } from "@mysociety/db";
 import {
@@ -46,6 +48,21 @@ export function registerBookingRoutes(app: FastifyInstance, options: BookingRout
     return reply.send(list.map(serializeResource));
   });
 
+  // Units the caller may book or raise tickets against, so the client never
+  // has to guess a unit id.
+  app.get("/resident/units", { preHandler: residentPreHandler }, async (request, reply) => {
+    const principal = request.principal;
+    if (!principal) return reply.code(401).send({ error: "Unauthorized" });
+    const societyId = principal.societyId;
+    if (!societyId) return reply.code(400).send({ error: "Resident not scoped to a society" });
+
+    const list = await tenantDb.withTenant(societyId, async (db) => {
+      const unitIds = await listUnitIdsForResident(db, principal.id);
+      return listUnitsByIds(db, unitIds);
+    });
+    return reply.send(list);
+  });
+
   // ── Resident: create booking ────────────────────────────────────────────────
 
   app.post("/resident/bookings", { preHandler: residentPreHandler }, async (request, reply) => {
@@ -58,6 +75,14 @@ export function registerBookingRoutes(app: FastifyInstance, options: BookingRout
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
 
     const { resourceId, unitId, slotStart, slotEnd } = parsed.data;
+
+    const unitIds = await tenantDb.withTenant(societyId, (db) =>
+      listUnitIdsForResident(db, principal.id),
+    );
+    if (!unitIds.includes(unitId)) {
+      return reply.code(403).send({ error: "Resident is not attached to this unit" });
+    }
+
     const result = await tenantDb.withTenant(societyId, (db) =>
       createBooking(db, {
         societyId,

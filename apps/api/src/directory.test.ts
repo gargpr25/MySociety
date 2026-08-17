@@ -351,6 +351,9 @@ describe("admin units CRUD", () => {
     expect(detailRes.statusCode).toBe(200);
     const detail = detailRes.json();
     expect(detail.unitResidents).toHaveLength(1);
+    // Resolved through unit_residents, which is what the admin console and the
+    // CSV importer write — the legacy residents.unit_id column stays null here.
+    expect(detail.residents.map((r: { name: string }) => r.name)).toEqual(["New Resident"]);
 
     await app.close();
 

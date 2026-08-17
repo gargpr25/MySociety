@@ -11,6 +11,7 @@ export {
   findUnitByFlatNo,
   findUnitById,
   listUnits,
+  listUnitsByIds,
   updateUnit,
 } from "./repositories/units.js";
 export { findRoleByName, findRoleById } from "./repositories/roles.js";
@@ -21,6 +22,7 @@ export {
   findResidentById,
   findResidentsByMobileAcrossTenants,
   listResidentsByUnitId,
+  listUnitIdsForResident,
 } from "./repositories/residents.js";
 export {
   createAdminUser,
@@ -71,6 +73,7 @@ export {
   listBillHeads,
   listBillsByCycleId,
   listBillsByUnitId,
+  listBillsByUnitIds,
   listBillingCycles,
   listLineItemsByBillId,
   listMeterReadingsForPeriod,

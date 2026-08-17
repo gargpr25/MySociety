@@ -136,8 +136,61 @@ async function setupSociety(label: string): Promise<TestCtx> {
     adminId: admin.id,
     facilityToken,
     facilityId: fm.id,
+    unitId: unit.id,
+    towerId: tower.id,
   };
 }
+
+describe("Tickets — unit ownership", () => {
+  it("rejects a ticket raised against a unit the resident is not attached to (403)", async () => {
+    const ctx = await setupSociety("ticket-foreign-unit");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+
+    const foreignUnit = await createUnit(createDb(adminPool), {
+      societyId: ctx.societyId,
+      towerId: ctx.towerId,
+      flatNo: "999",
+      type: "apartment",
+      carpetArea: 800,
+    });
+    if (!foreignUnit) throw new Error("foreign unit creation failed");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/resident/tickets",
+      headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "complaint",
+        category: "plumbing",
+        description: "Water leaking in the kitchen",
+        unitId: foreignUnit.id,
+      }),
+    });
+    expect(res.statusCode).toBe(403);
+
+    await app.close();
+  });
+
+  it("defaults the ticket to the resident's own unit", async () => {
+    const ctx = await setupSociety("ticket-default-unit");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/resident/tickets",
+      headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "complaint",
+        category: "plumbing",
+        description: "Water leaking in the kitchen",
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().unitId).toBe(ctx.unitId);
+
+    await app.close();
+  });
+});
 
 describe("Tickets — resident creates, admin manages", () => {
   it("resident can create a ticket and see it in their list", async () => {

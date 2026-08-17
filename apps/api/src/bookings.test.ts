@@ -10,6 +10,7 @@ import {
   findRoleByName,
   runMigrations,
   createParkingSpot,
+  withTenantContext,
 } from "@mysociety/db";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -51,6 +52,7 @@ interface TestCtx {
   adminToken: string;
   adminId: string;
   unitId: string;
+  towerId: string;
 }
 
 async function setupSociety(label: string): Promise<TestCtx> {
@@ -111,7 +113,15 @@ async function setupSociety(label: string): Promise<TestCtx> {
     identifier: admin.email,
   });
 
-  return { societyId: society.id, residentToken, residentId: resident.id, adminToken, adminId: admin.id, unitId: unit.id };
+  return {
+    societyId: society.id,
+    residentToken,
+    residentId: resident.id,
+    adminToken,
+    adminId: admin.id,
+    unitId: unit.id,
+    towerId: tower.id,
+  };
 }
 
 describe("Bookings — amenity slot reservations", () => {
@@ -142,6 +152,66 @@ describe("Bookings — amenity slot reservations", () => {
     expect(bookRes.statusCode).toBe(201);
     const booking = bookRes.json();
     expect(booking.status).toBe("confirmed");
+  });
+
+  it("rejects a booking for a unit the resident is not attached to (403)", async () => {
+    const ctx = await setupSociety("booking-foreign-unit");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+
+    const foreignUnit = await withTenantContext(tenantDb.db, ctx.societyId, (tx) =>
+      createUnit(tx, {
+        societyId: ctx.societyId,
+        towerId: ctx.towerId,
+        flatNo: "999",
+        type: "apartment",
+        carpetArea: 800,
+      }),
+    );
+    if (!foreignUnit) throw new Error("foreign unit creation failed");
+
+    const crRes = await app.inject({
+      method: "POST",
+      url: "/admin/resources",
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Gym", capacity: 5 }),
+    });
+    const resource = crRes.json();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/resident/bookings",
+      headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        resourceId: resource.id,
+        unitId: foreignUnit.id,
+        slotStart: new Date(Date.now() + 60_000).toISOString(),
+        slotEnd: new Date(Date.now() + 3_600_000).toISOString(),
+      }),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("lists only the caller's own units", async () => {
+    const ctx = await setupSociety("booking-my-units");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+
+    await withTenantContext(tenantDb.db, ctx.societyId, (tx) =>
+      createUnit(tx, {
+        societyId: ctx.societyId,
+        towerId: ctx.towerId,
+        flatNo: "888",
+        type: "apartment",
+        carpetArea: 800,
+      }),
+    );
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/resident/units",
+      headers: { authorization: `Bearer ${ctx.residentToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().map((u: { id: string }) => u.id)).toEqual([ctx.unitId]);
   });
 
   it("double-booking same slot same resource is rejected (409)", async () => {

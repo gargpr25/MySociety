@@ -38,6 +38,13 @@ export type Notice = {
   createdAt: string;
 };
 
+export type ResidentUnit = {
+  id: string;
+  towerId: string;
+  flatNo: string;
+  type: string;
+};
+
 export type ResidentPrincipal = {
   id: string;
   name: string;
@@ -137,6 +144,8 @@ export const api = {
   // ── Bookings ───────────────────────────────────────────────────────────────
 
   listResources: () => apiFetch<BookableResource[]>("/resident/resources"),
+
+  listMyUnits: () => apiFetch<ResidentUnit[]>("/resident/units"),
 
   createBooking: (input: { resourceId: string; unitId: string; slotStart: string; slotEnd: string }) =>
     apiFetch<ResidentBooking>("/resident/bookings", {
