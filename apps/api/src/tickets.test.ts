@@ -579,3 +579,72 @@ describe("Tickets — resident creates, admin manages", () => {
     expect(statusRes.json().status).toBe("in_progress");
   });
 });
+
+describe("Tickets — assignment guards", () => {
+  async function raiseTicket(app: ReturnType<typeof buildApp>, token: string) {
+    const res = await app.inject({
+      method: "POST",
+      url: "/resident/tickets",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "complaint",
+        category: "plumbing",
+        description: "Tap in the kitchen keeps dripping all day long",
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    return res.json();
+  }
+
+  it("rejects assignment to an id that is not an admin of the society (400)", async () => {
+    const ctx = await setupSociety("ticket-assign-unknown");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+    const ticket = await raiseTicket(app, ctx.residentToken);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/admin/tickets/${ticket.id}/assign`,
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ assignedTo: ctx.residentId }),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects assigning a closed ticket (400)", async () => {
+    const ctx = await setupSociety("ticket-assign-closed");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+    const ticket = await raiseTicket(app, ctx.residentToken);
+
+    const closeRes = await app.inject({
+      method: "POST",
+      url: `/admin/tickets/${ticket.id}/status`,
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ status: "closed" }),
+    });
+    expect(closeRes.statusCode).toBe(200);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/admin/tickets/${ticket.id}/assign`,
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ assignedTo: ctx.facilityId }),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("assigns to a facility manager of the society (200)", async () => {
+    const ctx = await setupSociety("ticket-assign-ok");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+    const ticket = await raiseTicket(app, ctx.residentToken);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/admin/tickets/${ticket.id}/assign`,
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ assignedTo: ctx.facilityId }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().assignedTo).toBe(ctx.facilityId);
+    expect(res.json().status).toBe("assigned");
+  });
+});

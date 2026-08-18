@@ -1,12 +1,15 @@
 import type { FastifyInstance } from "fastify";
 import {
   bulkUpsertMeterReadings,
+  countLineItemsByHeadId,
+  countPaidBillsByCycleId,
   createBillHead,
   createBillingCycle,
   deleteBillHead,
   findBillById,
   findBillHeadById,
   findBillingCycleById,
+  findBillingCycleByPeriod,
   findPreviousBillingCycle,
   findUnitById,
   getCollectionSummary,
@@ -93,6 +96,15 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
     const existing = await options.tenantDb.withTenant(societyId, (db) => findBillHeadById(db, id));
     if (!existing) return reply.code(404).send({ error: "Bill head not found" });
 
+    const usage = await options.tenantDb.withTenant(societyId, (db) =>
+      countLineItemsByHeadId(db, id),
+    );
+    if (usage > 0) {
+      return reply.code(409).send({
+        error: "Bill head is used by existing bills; deactivate it instead",
+      });
+    }
+
     await options.tenantDb.withTenant(societyId, (db) => deleteBillHead(db, id));
     return reply.code(204).send();
   });
@@ -113,6 +125,13 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
 
     const parsed = createBillingCycleSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+
+    const duplicate = await options.tenantDb.withTenant(societyId, (db) =>
+      findBillingCycleByPeriod(db, parsed.data.period),
+    );
+    if (duplicate) {
+      return reply.code(409).send({ error: `A cycle for ${parsed.data.period} already exists` });
+    }
 
     const cycle = await options.tenantDb.withTenant(societyId, (db) =>
       createBillingCycle(db, { societyId, ...parsed.data }),
@@ -152,6 +171,18 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
     if (!societyId) return reply.code(400).send({ error: "Admin account is not scoped to a society" });
 
     const { id } = request.params as { id: string };
+
+    // Regeneration replaces the cycle's bills, which would discard money already
+    // recorded against them.
+    const paidBills = await options.tenantDb.withTenant(societyId, (db) =>
+      countPaidBillsByCycleId(db, id),
+    );
+    if (paidBills > 0) {
+      return reply.code(409).send({
+        error: "Cannot regenerate: some bills in this cycle already have payments",
+      });
+    }
+
     try {
       const result = await options.tenantDb.withTenant(societyId, (db) =>
         generateBillsForCycle(db, societyId, id),
@@ -276,6 +307,9 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
     if (!societyId) return reply.code(400).send({ error: "Admin account is not scoped to a society" });
 
     const { id } = request.params as { id: string };
+    const cycle = await options.tenantDb.withTenant(societyId, (db) => findBillingCycleById(db, id));
+    if (!cycle) return reply.code(404).send({ error: "Billing cycle not found" });
+
     const bills = await options.tenantDb.withTenant(societyId, (db) => listBillsByCycleId(db, id));
     return reply.send(bills.map(serializeBill));
   });
@@ -307,6 +341,9 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
     const parsed = upsertMeterReadingSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
 
+    const invalid = await validateReadings(options, societyId, [parsed.data]);
+    if (invalid) return reply.code(400).send({ error: invalid });
+
     const row = await options.tenantDb.withTenant(societyId, (db) =>
       upsertMeterReading(db, { societyId, ...parsed.data }),
     );
@@ -326,6 +363,9 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
     const parsed = bulkMeterReadingsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
 
+    const invalid = await validateReadings(options, societyId, parsed.data.readings);
+    if (invalid) return reply.code(400).send({ error: invalid });
+
     const rows = parsed.data.readings.map((r) => ({
       societyId,
       unitId: r.unitId,
@@ -337,6 +377,49 @@ export function registerAdminBillingRoutes(app: FastifyInstance, options: AdminB
 
     await options.tenantDb.withTenant(societyId, (db) => bulkUpsertMeterReadings(db, rows));
     return reply.send({ imported: rows.length });
+  });
+}
+
+type ReadingInput = {
+  unitId: string;
+  headId: string;
+  period: string;
+  prevReading: number;
+  currentReading: number;
+};
+
+/**
+ * Readings drive metered charges, so the unit and head must exist in this
+ * society, the head must actually be metered, and consumption cannot be
+ * negative. Returns an error message, or undefined when all rows are valid.
+ */
+async function validateReadings(
+  options: AdminBillingRouteOptions,
+  societyId: string,
+  readings: ReadingInput[],
+): Promise<string | undefined> {
+  for (const r of readings) {
+    if (r.currentReading < r.prevReading) {
+      return `Current reading (${r.currentReading}) is below the previous reading (${r.prevReading})`;
+    }
+  }
+
+  const unitIds = [...new Set(readings.map((r) => r.unitId))];
+  const headIds = [...new Set(readings.map((r) => r.headId))];
+
+  return options.tenantDb.withTenant(societyId, async (db) => {
+    for (const unitId of unitIds) {
+      const unit = await findUnitById(db, unitId);
+      if (!unit) return `Unit ${unitId} not found`;
+    }
+    for (const headId of headIds) {
+      const head = await findBillHeadById(db, headId);
+      if (!head) return `Bill head ${headId} not found`;
+      if (head.computeRule !== "metered") {
+        return `Bill head '${head.name}' is not metered`;
+      }
+    }
+    return undefined;
   });
 }
 

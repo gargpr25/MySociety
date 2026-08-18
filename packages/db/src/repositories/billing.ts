@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { billHeads, billLineItems, billingCycles, bills, meterReadings } from "../schema.js";
 
@@ -51,6 +51,15 @@ export async function updateBillHead(
     .where(eq(billHeads.id, id))
     .returning();
   return row;
+}
+
+/** Line items keep historical invoices intact, so a used head must not be deleted. */
+export async function countLineItemsByHeadId(db: Database, headId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(billLineItems)
+    .where(eq(billLineItems.headId, headId));
+  return row?.count ?? 0;
 }
 
 export async function deleteBillHead(db: Database, id: string) {
@@ -183,6 +192,31 @@ export async function listBillsByUnitIds(db: Database, unitIds: string[]) {
     .from(bills)
     .where(inArray(bills.unitId, unitIds))
     .orderBy(desc(bills.dueDate));
+}
+
+/**
+ * Bills residents are allowed to see: bills of a draft cycle are working data
+ * that admins may still regenerate, so they stay hidden until the cycle is
+ * published.
+ */
+export async function listPublishedBillsByUnitIds(db: Database, unitIds: string[]) {
+  if (unitIds.length === 0) return [];
+  const rows = await db
+    .select({ bill: bills })
+    .from(bills)
+    .innerJoin(billingCycles, eq(bills.cycleId, billingCycles.id))
+    .where(and(inArray(bills.unitId, unitIds), ne(billingCycles.status, "draft")))
+    .orderBy(desc(bills.dueDate));
+  return rows.map((r) => r.bill);
+}
+
+/** Bills of a cycle that already received money; regenerating them loses payments. */
+export async function countPaidBillsByCycleId(db: Database, cycleId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`cast(count(*) as integer)` })
+    .from(bills)
+    .where(and(eq(bills.cycleId, cycleId), gt(bills.paidAmount, 0)));
+  return row?.count ?? 0;
 }
 
 export async function deleteBillsByCycleId(db: Database, cycleId: string) {

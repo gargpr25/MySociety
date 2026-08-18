@@ -565,3 +565,79 @@ describe("Parking allocations", () => {
     expect(a2.statusCode).toBe(201);
   });
 });
+
+describe("Booking and parking edge cases", () => {
+  it("rejects a booking whose slot is entirely in the past (400)", async () => {
+    const ctx = await setupSociety("booking-past");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+
+    const crRes = await app.inject({
+      method: "POST",
+      url: "/admin/resources",
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "Hall", capacity: 1 }),
+    });
+    const resource = crRes.json();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/resident/bookings",
+      headers: { authorization: `Bearer ${ctx.residentToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        resourceId: resource.id,
+        unitId: ctx.unitId,
+        slotStart: new Date(Date.now() - 7_200_000).toISOString(),
+        slotEnd: new Date(Date.now() - 3_600_000).toISOString(),
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects a parking allocation for an unknown spot (404)", async () => {
+    const ctx = await setupSociety("parking-unknown-spot");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/parking-allocations",
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        spotId: "00000000-0000-0000-0000-000000000000",
+        unitId: ctx.unitId,
+        period: "2024-03",
+        rentAmount: 0,
+        startsAt: new Date().toISOString(),
+      }),
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("rejects a parking allocation whose endsAt precedes startsAt (400)", async () => {
+    const ctx = await setupSociety("parking-bad-range");
+    const app = buildApp({ tenantDb, jwtSecret: JWT_SECRET, smsProvider: undefined });
+    const adminDb = createDb(adminPool);
+
+    const spot = await createParkingSpot(adminDb, {
+      societyId: ctx.societyId,
+      spotNo: "P-900",
+      type: "car",
+      isRentable: false,
+    });
+    if (!spot) throw new Error("spot creation failed");
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/admin/parking-allocations",
+      headers: { authorization: `Bearer ${ctx.adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        spotId: spot.id,
+        unitId: ctx.unitId,
+        period: "2024-04",
+        rentAmount: 0,
+        startsAt: new Date(Date.now() + 3_600_000).toISOString(),
+        endsAt: new Date().toISOString(),
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});

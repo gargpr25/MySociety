@@ -4,7 +4,9 @@ import {
   createPayment,
   createPaymentAllocations,
   findBillById,
+  findBillingCycleById,
   findPaymentByProviderOrderId,
+  listUnitIdsForResident,
   insertAuditLog,
   listAllocationsByPaymentId,
   listPaymentsByResident,
@@ -53,6 +55,21 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
 
     const bill = await tenantDb.withTenant(societyId, (db) => findBillById(db, billId));
     if (!bill) return reply.code(404).send({ error: "Bill not found" });
+
+    // The bill must belong to a flat the caller actually lives in: RLS only
+    // scopes to the society, so a bill id alone is not authorization.
+    const unitIds = await tenantDb.withTenant(societyId, (db) =>
+      listUnitIdsForResident(db, residentId),
+    );
+    if (!unitIds.includes(bill.unitId)) return reply.code(404).send({ error: "Bill not found" });
+
+    const cycle = await tenantDb.withTenant(societyId, (db) =>
+      findBillingCycleById(db, bill.cycleId),
+    );
+    if (!cycle || cycle.status === "draft") {
+      return reply.code(400).send({ error: "Bill has not been published yet" });
+    }
+
     if (bill.status === "paid") return reply.code(400).send({ error: "Bill is already paid" });
 
     const remaining = bill.totalDue - bill.paidAmount;
@@ -71,7 +88,7 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
       createPayment(db, {
         societyId,
         residentId,
-        provider: "fake",
+        provider: paymentProvider.name,
         providerOrderId: orderResult.providerOrderId,
         amountPaise,
         metadata: { billId, societyId },
@@ -93,7 +110,7 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
   // Uses superAdminDb (bypasses RLS) for cross-tenant lookups on payments.
 
   app.post("/payments/webhook", async (request, reply) => {
-    const rawBody = JSON.stringify(request.body);
+    const rawBody = request.rawBody ?? JSON.stringify(request.body);
     const signature = (request.headers["x-payment-signature"] as string) ?? "";
 
     const parsed = paymentProvider.parseWebhookEvent(rawBody, signature);
@@ -101,7 +118,7 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
 
     // gateway_events has no RLS — superAdminDb for consistent cross-tenant access
     const { alreadyProcessed, row: gevRow } = await upsertGatewayEvent(superAdminDb, {
-      provider: "fake",
+      provider: paymentProvider.name,
       eventId: parsed.eventId,
       eventType: parsed.event,
       payload: parsed,
@@ -112,6 +129,23 @@ export function registerPaymentRoutes(app: FastifyInstance, options: PaymentRout
     if (parsed.event === "payment.captured") {
       // superAdminDb bypasses RLS for cross-tenant payment lookup
       const payment = await findPaymentByProviderOrderId(superAdminDb, parsed.orderId);
+
+      if (payment && parsed.amountPaise > payment.amountPaise) {
+        // Under-payment is a legitimate partial capture, but a capture larger
+        // than the order we created must never reach a bill: it would credit an
+        // amount nobody was asked to pay. Leave it pending for reconciliation.
+        await insertAuditLog(superAdminDb, {
+          societyId: payment.societyId,
+          actorKind: "system",
+          action: "payment.amount_mismatch",
+          entityType: "payments",
+          entityId: payment.id,
+          beforeState: { amountPaise: payment.amountPaise },
+          afterState: { amountPaise: parsed.amountPaise, providerPaymentId: parsed.paymentId },
+        });
+        await markGatewayEventProcessed(superAdminDb, gevRow.id);
+        return reply.code(400).send({ error: "Captured amount does not match the payment order" });
+      }
 
       if (payment && payment.status === "pending") {
         await tenantDb.withTenant(payment.societyId, async (db) => {

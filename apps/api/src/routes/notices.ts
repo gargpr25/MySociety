@@ -42,6 +42,10 @@ export function registerNoticeRoutes(app: FastifyInstance, options: NoticeRouteO
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
 
     const { title, body, audience, pinned, publishAt, expiresAt } = parsed.data;
+    if (expiresAt && new Date(expiresAt) <= new Date(publishAt ?? Date.now())) {
+      return reply.code(400).send({ error: "expiresAt must be after publishAt" });
+    }
+
     const notice = await options.tenantDb.withTenant(societyId, (db) =>
       createNotice(db, {
         societyId,
@@ -69,6 +73,11 @@ export function registerNoticeRoutes(app: FastifyInstance, options: NoticeRouteO
     if (!existing) return reply.code(404).send({ error: "Notice not found" });
 
     const { title, body, audience, pinned, publishAt, expiresAt } = parsed.data;
+    const effectivePublishAt = publishAt ? new Date(publishAt) : existing.publishAt;
+    if (expiresAt && new Date(expiresAt) <= effectivePublishAt) {
+      return reply.code(400).send({ error: "expiresAt must be after publishAt" });
+    }
+
     const updated = await options.tenantDb.withTenant(societyId, (db) =>
       updateNotice(db, id, {
         ...(title !== undefined && { title }),
@@ -101,14 +110,7 @@ export function registerNoticeRoutes(app: FastifyInstance, options: NoticeRouteO
     const role = request.principal?.role;
     if (!societyId) return reply.code(400).send({ error: "Resident account is not scoped to a society" });
 
-    // Residents always see 'all'; owners also see 'owners'; tenants also see 'tenants'
-    const audiences: NoticeAudience[] = ["all"];
-    if (role === "resident_owner") audiences.push("owners");
-    if (role === "resident_tenant") audiences.push("tenants");
-    if (role === "resident_family") {
-      // family members see all audience types their primary occupant might see
-      audiences.push("owners", "tenants");
-    }
+    const audiences = audiencesForRole(role);
 
     const rows = await options.tenantDb.withTenant(societyId, (db) =>
       listActiveNotices(db, { audiences }),
@@ -125,6 +127,11 @@ export function registerNoticeRoutes(app: FastifyInstance, options: NoticeRouteO
     const notice = await options.tenantDb.withTenant(societyId, (db) => findNoticeById(db, id));
     if (!notice) return reply.code(404).send({ error: "Notice not found" });
 
+    // The list is audience-filtered, so the detail route must be too
+    if (!audiencesForRole(request.principal?.role).includes(notice.audience as NoticeAudience)) {
+      return reply.code(404).send({ error: "Notice not found" });
+    }
+
     const now = new Date();
     const isActive =
       notice.publishAt <= now && (notice.expiresAt === null || notice.expiresAt > now);
@@ -132,6 +139,16 @@ export function registerNoticeRoutes(app: FastifyInstance, options: NoticeRouteO
 
     return reply.send(serializeNotice(notice));
   });
+}
+
+/** Residents always see 'all'; owners also see 'owners', tenants 'tenants'. */
+function audiencesForRole(role: string | undefined): NoticeAudience[] {
+  const audiences: NoticeAudience[] = ["all"];
+  if (role === "resident_owner") audiences.push("owners");
+  if (role === "resident_tenant") audiences.push("tenants");
+  // family members see what their primary occupant might see
+  if (role === "resident_family") audiences.push("owners", "tenants");
+  return audiences;
 }
 
 function serializeNotice(n: {

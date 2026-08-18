@@ -185,15 +185,18 @@ export function registerAdminDirectoryRoutes(app: FastifyInstance, options: Admi
     if (!societyId) {
       return reply.code(400).send({ error: "Admin account is not scoped to a society" });
     }
-    const { residentId } = request.params as { id: string; residentId: string };
+    const { id: unitId, residentId } = request.params as { id: string; residentId: string };
     const parsed = updateUnitResidentInputSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.message });
     }
 
-    const updated = await options.tenantDb.withTenant(societyId, (tx) =>
-      updateUnitResident(tx, residentId, parsed.data),
-    );
+    // The path identifies the resident, while the row is keyed by its own id.
+    const updated = await options.tenantDb.withTenant(societyId, async (tx) => {
+      const link = await findUnitResident(tx, unitId, residentId);
+      if (!link) return undefined;
+      return updateUnitResident(tx, link.id, parsed.data);
+    });
     if (!updated) {
       return reply.code(404).send({ error: "unit_resident link not found" });
     }
@@ -205,8 +208,16 @@ export function registerAdminDirectoryRoutes(app: FastifyInstance, options: Admi
     if (!societyId) {
       return reply.code(400).send({ error: "Admin account is not scoped to a society" });
     }
-    const { residentId } = request.params as { id: string; residentId: string };
-    await options.tenantDb.withTenant(societyId, (tx) => deleteUnitResident(tx, residentId));
+    const { id: unitId, residentId } = request.params as { id: string; residentId: string };
+    const deleted = await options.tenantDb.withTenant(societyId, async (tx) => {
+      const link = await findUnitResident(tx, unitId, residentId);
+      if (!link) return false;
+      await deleteUnitResident(tx, link.id);
+      return true;
+    });
+    if (!deleted) {
+      return reply.code(404).send({ error: "unit_resident link not found" });
+    }
     return reply.code(204).send();
   });
 

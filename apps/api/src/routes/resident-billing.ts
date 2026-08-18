@@ -2,9 +2,10 @@ import type { FastifyInstance } from "fastify";
 import {
   findBillById,
   findBillingCycleById,
+  findSocietyById,
   findUnitById,
-  listBillsByUnitIds,
   listLineItemsByBillId,
+  listPublishedBillsByUnitIds,
   listUnitIdsForResident,
 } from "@mysociety/db";
 import type { TenantAwareDb } from "../db.js";
@@ -33,7 +34,7 @@ export function registerResidentBillingRoutes(app: FastifyInstance, options: Res
     if (unitIds.length === 0) return reply.send([]);
 
     const bills = await options.tenantDb.withTenant(societyId, (db) =>
-      listBillsByUnitIds(db, unitIds),
+      listPublishedBillsByUnitIds(db, unitIds),
     );
     return reply.send(bills.map(serializeBill));
   });
@@ -49,10 +50,9 @@ export function registerResidentBillingRoutes(app: FastifyInstance, options: Res
     const bill = await options.tenantDb.withTenant(societyId, (db) => findBillById(db, billId));
     if (!bill) return reply.code(404).send({ error: "Bill not found" });
 
-    const unitIds = await options.tenantDb.withTenant(societyId, (db) =>
-      listUnitIdsForResident(db, residentId),
-    );
-    if (!unitIds.includes(bill.unitId)) return reply.code(404).send({ error: "Bill not found" });
+    if (!(await residentMayReadBill(options, societyId, residentId, bill))) {
+      return reply.code(404).send({ error: "Bill not found" });
+    }
 
     const lineItems = await options.tenantDb.withTenant(societyId, (db) =>
       listLineItemsByBillId(db, billId),
@@ -75,20 +75,23 @@ export function registerResidentBillingRoutes(app: FastifyInstance, options: Res
     const bill = await options.tenantDb.withTenant(societyId, (db) => findBillById(db, billId));
     if (!bill) return reply.code(404).send({ error: "Bill not found" });
 
-    const unitIds = await options.tenantDb.withTenant(societyId, (db) =>
-      listUnitIdsForResident(db, residentId),
-    );
-    if (!unitIds.includes(bill.unitId)) return reply.code(404).send({ error: "Bill not found" });
+    if (!(await residentMayReadBill(options, societyId, residentId, bill))) {
+      return reply.code(404).send({ error: "Bill not found" });
+    }
 
-    const [lineItems, cycle, unit] = await options.tenantDb.withTenant(societyId, async (db) => {
-      const li = await listLineItemsByBillId(db, billId);
-      const cy = await findBillingCycleById(db, bill.cycleId);
-      const u = await findUnitById(db, bill.unitId);
-      return [li, cy, u] as const;
-    });
+    const [lineItems, cycle, unit, society] = await options.tenantDb.withTenant(
+      societyId,
+      async (db) => {
+        const li = await listLineItemsByBillId(db, billId);
+        const cy = await findBillingCycleById(db, bill.cycleId);
+        const u = await findUnitById(db, bill.unitId);
+        const s = await findSocietyById(db, societyId);
+        return [li, cy, u, s] as const;
+      },
+    );
 
     const pdfBytes = await generateInvoicePdf({
-      societyName: `Society ${societyId.slice(0, 8)}`,
+      societyName: society?.name ?? `Society ${societyId.slice(0, 8)}`,
       flatNo: unit?.flatNo ?? bill.unitId,
       period: cycle?.period ?? bill.cycleId,
       dueDate: bill.dueDate,
@@ -111,6 +114,27 @@ export function registerResidentBillingRoutes(app: FastifyInstance, options: Res
     reply.header("content-disposition", `attachment; filename="invoice-${billId}.pdf"`);
     return reply.send(Buffer.from(pdfBytes));
   });
+}
+
+/**
+ * A resident may read a bill of a flat they are linked to, once the cycle it
+ * belongs to has left draft.
+ */
+async function residentMayReadBill(
+  options: ResidentBillingRouteOptions,
+  societyId: string,
+  residentId: string,
+  bill: { unitId: string; cycleId: string },
+): Promise<boolean> {
+  const unitIds = await options.tenantDb.withTenant(societyId, (db) =>
+    listUnitIdsForResident(db, residentId),
+  );
+  if (!unitIds.includes(bill.unitId)) return false;
+
+  const cycle = await options.tenantDb.withTenant(societyId, (db) =>
+    findBillingCycleById(db, bill.cycleId),
+  );
+  return cycle !== undefined && cycle !== null && cycle.status !== "draft";
 }
 
 function serializeBill(b: {

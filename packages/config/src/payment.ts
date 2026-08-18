@@ -58,6 +58,8 @@ export interface OrderStatusResult {
 }
 
 export interface PaymentProvider {
+  /** Stored on payments and gateway_events so rows stay attributable. */
+  readonly name: string;
   createOrder(input: CreateOrderInput): Promise<CreateOrderResult>;
   parseWebhookEvent(rawBody: string, signature: string): ParsedWebhookEvent;
   createLinkedAccount(input: CreateLinkedAccountInput): Promise<CreateLinkedAccountResult>;
@@ -67,6 +69,7 @@ export interface PaymentProvider {
 }
 
 export class FakePaymentProvider implements PaymentProvider {
+  readonly name = "fake";
   private readonly webhookSecret: string;
   private readonly _capturedOrders = new Map<string, { paymentId: string; amountPaise: number }>();
 

@@ -5,17 +5,20 @@ import {
   findActiveChatSession,
   listChatMessages,
   listTicketsByResident,
+  listUnitIdsForResident,
   saveChatMessage,
 } from "@mysociety/db";
 import { z } from "zod";
 import type { TenantAwareDb } from "../db.js";
 import { authenticate, requireRole } from "../auth/middleware.js";
 import { createClassifier, MENU_MESSAGE } from "../chat/classifier.js";
+import type { DispatcherFn } from "../connectors/dispatcher.js";
 
 export interface ChatRouteOptions {
   tenantDb: TenantAwareDb;
   jwtSecret: string;
   classifierType?: string;
+  dispatcher?: DispatcherFn;
 }
 
 const RESIDENT_ROLES = ["resident_owner", "resident_tenant", "resident_family"] as const;
@@ -35,7 +38,7 @@ type PendingClassification = {
 };
 
 export function registerChatRoutes(app: FastifyInstance, options: ChatRouteOptions) {
-  const { tenantDb } = options;
+  const { tenantDb, dispatcher } = options;
   const classifier = createClassifier(options.classifierType);
   const preHandler = [authenticate(options.jwtSecret), requireRole(...RESIDENT_ROLES)];
 
@@ -72,10 +75,15 @@ export function registerChatRoutes(app: FastifyInstance, options: ChatRouteOptio
     let botMetadata: Record<string, unknown> = {};
 
     if (pending && CONFIRM_RE.test(userText.trim())) {
-      // Phase 2 — confirmed: create the ticket
+      // Phase 2 — confirmed: create the ticket. Attach the flat when the
+      // resident lives in exactly one, so admins see it like app-raised ones.
+      const unitIds = await tenantDb.withTenant(societyId, (db) =>
+        listUnitIdsForResident(db, principal.id),
+      );
       const ticket = await tenantDb.withTenant(societyId, (db) =>
         createTicket(db, {
           societyId,
+          unitId: unitIds.length === 1 ? unitIds[0] : undefined,
           raisedBy: principal.id,
           type: pending.type,
           category: pending.category,
@@ -84,6 +92,14 @@ export function registerChatRoutes(app: FastifyInstance, options: ChatRouteOptio
         }),
       );
       ticketId = ticket.id;
+      dispatcher?.({
+        type: "ticket.created",
+        societyId,
+        ticketId: ticket.id,
+        category: ticket.category,
+        ticketType: ticket.type,
+        unitId: ticket.unitId ?? null,
+      }).catch(() => undefined);
       const label = pending.intent === "complaint" ? "complaint" : "request";
       botReply =
         `Your ${label} has been logged (ticket #${ticket.id.slice(0, 8)}). ` +
