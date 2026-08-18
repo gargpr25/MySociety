@@ -30,6 +30,28 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: true });
   app.register(multipart);
 
+  // Keep the exact bytes the client sent: gateway webhook signatures are
+  // computed over the raw payload, which re-serializing does not reproduce.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (request, body, done) => {
+      const raw = body as string;
+      request.rawBody = raw;
+      if (raw.length === 0) {
+        done(null, undefined);
+        return;
+      }
+      try {
+        done(null, JSON.parse(raw));
+      } catch {
+        const err = new Error("Invalid JSON body") as Error & { statusCode?: number };
+        err.statusCode = 400;
+        done(err, undefined);
+      }
+    },
+  );
+
   if (options.tenantDb) {
     app.decorate("tenantDb", options.tenantDb);
   }
@@ -80,6 +102,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       tenantDb: options.tenantDb,
       jwtSecret: options.jwtSecret,
       classifierType: options.chatClassifier,
+      dispatcher,
     });
 
     if (options.integrationEncryptionKey) {
@@ -113,5 +136,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 declare module "fastify" {
   interface FastifyInstance {
     tenantDb?: TenantAwareDb;
+  }
+  interface FastifyRequest {
+    rawBody?: string;
   }
 }

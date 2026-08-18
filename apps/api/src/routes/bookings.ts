@@ -7,7 +7,9 @@ import {
   endParkingAllocation,
   findActiveAllocationBySpot,
   findBookingById,
+  findParkingSpotById,
   findResourceById,
+  findUnitById,
   listAllResources,
   listBookingsByResident,
   listBookingsBySociety,
@@ -81,6 +83,10 @@ export function registerBookingRoutes(app: FastifyInstance, options: BookingRout
     );
     if (!unitIds.includes(unitId)) {
       return reply.code(403).send({ error: "Resident is not attached to this unit" });
+    }
+
+    if (new Date(slotEnd) <= new Date()) {
+      return reply.code(400).send({ error: "Cannot book a slot in the past" });
     }
 
     const result = await tenantDb.withTenant(societyId, (db) =>
@@ -205,8 +211,21 @@ export function registerBookingRoutes(app: FastifyInstance, options: BookingRout
     const parsed = createParkingAllocationSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
 
+    const { spotId, unitId, startsAt, endsAt } = parsed.data;
+    if (endsAt && new Date(endsAt) <= new Date(startsAt)) {
+      return reply.code(400).send({ error: "endsAt must be after startsAt" });
+    }
+
+    const [spot, unit] = await tenantDb.withTenant(societyId, async (db) => {
+      const s = await findParkingSpotById(db, spotId);
+      const u = await findUnitById(db, unitId);
+      return [s, u] as const;
+    });
+    if (!spot) return reply.code(404).send({ error: "Parking spot not found" });
+    if (!unit) return reply.code(404).send({ error: "Unit not found" });
+
     const existing = await tenantDb.withTenant(societyId, (db) =>
-      findActiveAllocationBySpot(db, parsed.data.spotId),
+      findActiveAllocationBySpot(db, spotId),
     );
     if (existing) return reply.code(409).send({ error: "Spot already has an active allocation" });
 

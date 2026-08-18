@@ -15,6 +15,10 @@ const envSchema = z.object({
   SEED_ENABLED: z.coerce.boolean().default(false),
   SMS_PROVIDER: z.enum(["console"]).default("console"),
   PAYMENT_PROVIDER: z.enum(["fake", "razorpay"]).default("fake"),
+  // Shared secret the gateway signs webhook bodies with. Without it the
+  // provider falls back to a well-known development secret, so webhook
+  // callbacks are forgeable — set it wherever payments are enabled.
+  PAYMENT_WEBHOOK_SECRET: z.string().min(32).optional(),
   JWT_SECRET: z.string().min(16),
   // 32-byte AES-256 key encoded as 64 hex chars. Required in production for
   // encrypting integration connector credentials at rest.

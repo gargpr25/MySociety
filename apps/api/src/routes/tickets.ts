@@ -3,6 +3,7 @@ import {
   addTicketComment,
   assignTicket,
   createTicket,
+  findAdminById,
   findTicketById,
   listOverdueOpenTickets,
   listTicketEvents,
@@ -200,6 +201,17 @@ export function registerTicketRoutes(app: FastifyInstance, options: TicketRouteO
 
     const ticket = await tenantDb.withTenant(societyId, (db) => findTicketById(db, id));
     if (!ticket) return reply.code(404).send({ error: "Not found" });
+
+    // Assignment moves the ticket to 'assigned', which would silently resurrect
+    // a finished ticket outside the normal transition rules.
+    if (ticket.status === "resolved" || ticket.status === "closed") {
+      return reply.code(400).send({ error: `Cannot assign a ${ticket.status} ticket` });
+    }
+
+    const assignee = await tenantDb.withTenant(societyId, (db) =>
+      findAdminById(db, parsed.data.assignedTo),
+    );
+    if (!assignee) return reply.code(400).send({ error: "Assignee is not an admin of this society" });
 
     const updated = await tenantDb.withTenant(societyId, (db) =>
       assignTicket(db, id, parsed.data.assignedTo, principal.id, parsed.data.comment),

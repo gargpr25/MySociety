@@ -63,3 +63,8 @@ export async function bulkFindOrCreateParkingSpots(
   const rows = await db.select().from(parkingSpots).where(eq(parkingSpots.societyId, societyId));
   return new Map(rows.map((r) => [r.spotNo, r.id]));
 }
+
+export async function findParkingSpotById(db: Database, id: string) {
+  const [row] = await db.select().from(parkingSpots).where(eq(parkingSpots.id, id));
+  return row;
+}

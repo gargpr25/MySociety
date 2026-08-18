@@ -390,3 +390,83 @@ describe("admin units CRUD", () => {
     await app.close();
   });
 });
+
+describe("admin unit-resident link management", () => {
+  it("updates and removes a link addressed by resident id", async () => {
+    const { society, accessToken } = await setupSociety("Unit Resident Link Society");
+    const app = buildTestApp();
+
+    const tower = await withTenantContext(tenantDb.db, society.id, (tx) =>
+      createTower(tx, { societyId: society.id, name: "Link Tower" }),
+    );
+    if (!tower) throw new Error("failed to create tower");
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/admin/units",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { towerId: tower.id, flatNo: "301", type: "2bhk", carpetArea: 900 },
+    });
+    const unit = createRes.json();
+
+    const addRes = await app.inject({
+      method: "POST",
+      url: `/admin/units/${unit.id}/residents`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { name: "Link Resident", mobile: uniqueMobile(), relationship: "tenant", canPay: true },
+    });
+    expect(addRes.statusCode).toBe(201);
+    const link = addRes.json();
+
+    const patchRes = await app.inject({
+      method: "PATCH",
+      url: `/admin/units/${unit.id}/residents/${link.residentId}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { canPay: false },
+    });
+    expect(patchRes.statusCode).toBe(200);
+    expect(patchRes.json().canPay).toBe(false);
+
+    const delRes = await app.inject({
+      method: "DELETE",
+      url: `/admin/units/${unit.id}/residents/${link.residentId}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(delRes.statusCode).toBe(204);
+
+    const detailRes = await app.inject({
+      method: "GET",
+      url: `/admin/units/${unit.id}`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(detailRes.json().unitResidents).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it("returns 404 when the link does not exist", async () => {
+    const { society, accessToken } = await setupSociety("Unit Resident Missing Link Society");
+    const app = buildTestApp();
+
+    const tower = await withTenantContext(tenantDb.db, society.id, (tx) =>
+      createTower(tx, { societyId: society.id, name: "Missing Tower" }),
+    );
+    if (!tower) throw new Error("failed to create tower");
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/admin/units",
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { towerId: tower.id, flatNo: "302", type: "2bhk", carpetArea: 900 },
+    });
+    const unit = createRes.json();
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/admin/units/${unit.id}/residents/00000000-0000-0000-0000-000000000000`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});

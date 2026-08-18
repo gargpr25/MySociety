@@ -13,6 +13,11 @@ export async function createSociety(
   return row;
 }
 
+export async function findSocietyById(db: Database, id: string) {
+  const [row] = await db.select().from(societies).where(eq(societies.id, id));
+  return row;
+}
+
 export async function findSocietyByName(db: Database, name: string) {
   const [row] = await db.select().from(societies).where(eq(societies.name, name));
   return row;

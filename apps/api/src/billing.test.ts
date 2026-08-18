@@ -534,6 +534,16 @@ describe("Billing engine — resident bill access", () => {
     const cycle = cycleRes.json<{ id: string }>();
     await app.inject({ method: "POST", url: `/admin/billing/cycles/${cycle.id}/generate`, headers: { Authorization: `Bearer ${adminToken}` } });
 
+    // Draft bills are admin working data — invisible to the resident until published
+    const draftListRes = await app.inject({
+      method: "GET",
+      url: "/resident/bills",
+      headers: { Authorization: `Bearer ${residentToken}` },
+    });
+    expect(draftListRes.json<unknown[]>()).toHaveLength(0);
+
+    await app.inject({ method: "POST", url: `/admin/billing/cycles/${cycle.id}/publish`, headers: { Authorization: `Bearer ${adminToken}` } });
+
     const listRes = await app.inject({
       method: "GET",
       url: "/resident/bills",
@@ -584,6 +594,7 @@ describe("Billing engine — resident bill access", () => {
       url: `/admin/billing/cycles/${cycle.id}/generate`,
       headers: { Authorization: `Bearer ${adminToken}` },
     });
+    await app.inject({ method: "POST", url: `/admin/billing/cycles/${cycle.id}/publish`, headers: { Authorization: `Bearer ${adminToken}` } });
 
     const listRes = await app.inject({
       method: "GET",
@@ -677,9 +688,8 @@ describe("Billing engine — resident bill access", () => {
       url: `/admin/billing/cycles/${cycleA.id}/bills`,
       headers: { Authorization: `Bearer ${adminTokenB}` },
     });
-    // RLS means the bills list will be empty (not 403), since the cycle id lookup returns 0 rows
-    const billsB = billsBRes.json<{ id: string }[]>();
-    expect(billsB).toHaveLength(0);
+    // RLS hides the cycle itself from society B, so the route reports it missing
+    expect(billsBRes.statusCode).toBe(404);
 
     await app.close();
   });
